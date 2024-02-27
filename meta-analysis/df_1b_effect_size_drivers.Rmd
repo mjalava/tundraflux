@@ -1,0 +1,2844 @@
+---
+title: "effect size drivers"
+output:
+  html_document:
+    df_print: paged
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+#load data
+```{r load data, include=FALSE}
+library("ggplot2")
+library("plyr")
+library("dplyr")
+library("car")
+library("tidyr")
+library("readxl")
+library("reshape2")
+library("tidyverse")
+library("ggrepel")
+library("tibble")
+library("ggforce")
+library("lubridate")
+library("esc")
+library("effsize")
+library("metafor")
+library("corrplot")
+library("MASS")
+library("meta")
+library("metafor")
+library("installr")
+library("crayon")
+library("stringr")
+library("tibble")
+
+DS_final<-read.csv("df_1.csv")
+DS_final<-DS_final[,-c(1)]
+
+
+#plot-level df
+DS_final$Distinct_Plots<-paste(DS_final$Dataset_ID,DS_final$Treatment,sep="_")
+DS_final$Distinct_Plots<-paste(DS_final$Distinct_Plots,DS_final$Plot_ID,sep="_")
+DS_final$Distinct_Plots<-as.factor(DS_final$Distinct_Plots)
+DS_final$Plot_ID<-as.factor(DS_final$Plot_ID)
+DS_final$Treatment<-as.factor(DS_final$Treatment)
+
+df_PLOT_LEVEL<-DS_final %>%  distinct(Distinct_Plots, .keep_all = TRUE)   
+
+
+```
+
+
+
+#Hedges SMD (standardized mean diff)
+##climate
+```{r climate, warnings=FALSE, echo=FALSE, message=FALSE}
+############### AIR TEMP (AT) ###############
+
+DS_final_AT<-DS_final[-which(is.na(DS_final$Air_Temp)),]
+
+dfSummary_AT<-DS_final_AT %>% group_by(Dataset_ID, Treatment) %>% summarize(MEAN=mean(Air_Temp), SDEV=sd(Air_Temp), SS=n())
+
+dfSummary_ATCTL <- dfSummary_AT  %>% dplyr::filter(Treatment=="CTL")
+dfSummary_ATOTC <- dfSummary_AT  %>% dplyr::filter(Treatment=="OTC")
+dfSummary_AT <- full_join(dfSummary_ATCTL, dfSummary_ATOTC, by="Dataset_ID")
+
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("MEAN.x"="MEAN_CTL"))
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("MEAN.y"="MEAN_OTC"))
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("SDEV.x"="SDEV_CTL"))
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("SDEV.y"="SDEV_OTC"))
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("SS.x"="SS_CTL"))
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("SS.y"="SS_OTC"))
+
+# Calculate actual effect sizes per dataset (Raw SMD)
+SMDAT <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummary_AT 
+  )
+
+SMDAT<-plyr::rename(SMDAT,c("yi"="Hedges_SMDAT"))
+SMDAT<-plyr::rename(SMDAT,c("vi"="Hedges_SMDAT_VARIANCE"))
+
+Mean_SMDAT<-mean(SMDAT$Hedges_SMDAT)
+Mean_SMDAT
+
+#Add confidence intervals
+SMDAT$CI_lb<-SMDAT$Hedges_SMDAT-1.96*sqrt(SMDAT$Hedges_SMDAT_VARIANCE)
+SMDAT$CI_ub<-SMDAT$Hedges_SMDAT+1.96*sqrt(SMDAT$Hedges_SMDAT_VARIANCE)
+
+
+
+############### SOIL TEMP (AT) ###############
+
+DS_final_ST<-DS_final[-which(is.na(DS_final$Soil_Temp)),]
+
+dfSummary_ST<-DS_final_ST %>% group_by(Dataset_ID, Treatment) %>% summarize(MEAN=mean(Soil_Temp), SDEV=sd(Soil_Temp), SS=n())
+
+dfSummary_STCTL <- dfSummary_ST  %>% dplyr::filter(Treatment=="CTL")
+dfSummary_STOTC <- dfSummary_ST  %>% dplyr::filter(Treatment=="OTC")
+dfSummary_ST <- full_join(dfSummary_STCTL, dfSummary_STOTC, by="Dataset_ID")
+
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("MEAN.x"="MEAN_CTL"))
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("MEAN.y"="MEAN_OTC"))
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("SDEV.x"="SDEV_CTL"))
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("SDEV.y"="SDEV_OTC"))
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("SS.x"="SS_CTL"))
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("SS.y"="SS_OTC"))
+
+SMDST <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummary_ST 
+  )
+
+SMDST<-plyr::rename(SMDST,c("yi"="Hedges_SMDST"))
+SMDST<-plyr::rename(SMDST,c("vi"="Hedges_SMDST_VARIANCE"))
+
+Mean_SMDST<-mean(SMDST$Hedges_SMDST)
+Mean_SMDST
+
+SMDST$CI_lb<-SMDST$Hedges_SMDST-1.96*sqrt(SMDST$Hedges_SMDST_VARIANCE)
+SMDST$CI_ub<-SMDST$Hedges_SMDST+1.96*sqrt(SMDST$Hedges_SMDST_VARIANCE)
+
+
+
+
+############### SOIL MOIST (AT) ###############
+
+DS_final_SM<-DS_final[-which(is.na(DS_final$SM)),]
+
+dfSummary_SM<-DS_final_SM %>% group_by(Dataset_ID, Treatment) %>% summarize(MEAN=mean(SM), SDEV=sd(SM), SS=n())
+
+dfSummary_SMCTL <- dfSummary_SM  %>% dplyr::filter(Treatment=="CTL")
+dfSummary_SMOTC <- dfSummary_SM  %>% dplyr::filter(Treatment=="OTC")
+dfSummary_SM <- full_join(dfSummary_SMCTL, dfSummary_SMOTC, by="Dataset_ID")
+
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("MEAN.x"="MEAN_CTL"))
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("MEAN.y"="MEAN_OTC"))
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("SDEV.x"="SDEV_CTL"))
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("SDEV.y"="SDEV_OTC"))
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("SS.x"="SS_CTL"))
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("SS.y"="SS_OTC"))
+
+SMDSM <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummary_SM 
+  )
+
+SMDSM<-plyr::rename(SMDSM,c("yi"="Hedges_SMDSM"))
+SMDSM<-plyr::rename(SMDSM,c("vi"="Hedges_SMDSM_VARIANCE"))
+
+Mean_SMDSM<-mean(SMDSM$Hedges_SMDSM)
+Mean_SMDSM
+
+SMDSM$CI_lb<-SMDSM$Hedges_SMDSM-1.96*sqrt(SMDSM$Hedges_SMDSM_VARIANCE)
+SMDSM$CI_ub<-SMDSM$Hedges_SMDSM+1.96*sqrt(SMDSM$Hedges_SMDSM_VARIANCE)
+
+
+write.csv(dfSummary_AT, "dfSummaryAT.csv")
+write.csv(dfSummary_ST, "dfSummaryST.csv")
+write.csv(dfSummary_SM, "dfSummarySM.csv")
+
+write.csv(SMDAT, "SMDAT.csv")
+write.csv(SMDST, "SMDST.csv")
+write.csv(SMDSM, "SMDSM.csv")
+
+# df_PLOT_LEVEL  %>% dplyr::filter(Dataset_ID=="SWE_12_ER_2001")
+
+
+```
+
+
+##soil
+```{r soil, warnings=FALSE, echo=FALSE, message=FALSE}
+
+############### SOM_Org ###############
+
+df_PLOT_LEVEL_SOM_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SOM_Org)),]
+
+dfSummarySOM_Org<-df_PLOT_LEVEL_SOM_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SOM_Org), SDEV=sd(SOM_Org), SS=n())
+
+dfSummarySOM_OrgCTL <- dfSummarySOM_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummarySOM_OrgOTC <- dfSummarySOM_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummarySOM_Org <- full_join(dfSummarySOM_OrgCTL, dfSummarySOM_OrgOTC, by="Dataset_ID")
+
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("SS.x"="SS_CTL"))
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("SS.y"="SS_OTC"))
+
+SMDSOM_Org <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarySOM_Org 
+  )
+
+SMDSOM_Org<-plyr::rename(SMDSOM_Org,c("yi"="Hedges_SMDSOM_Org"))
+SMDSOM_Org<-plyr::rename(SMDSOM_Org,c("vi"="Hedges_SMDSOM_Org_VARIANCE"))
+
+CheckNA<-which(is.na(SMDSOM_Org$Hedges_SMDSOM_Org))
+if(length(CheckNA)>0) {
+SMDSOM_Org<-SMDSOM_Org[-which(is.na(SMDSOM_Org$Hedges_SMDSOM_Org)),]}
+
+
+Mean_SMDSOM_Org<-mean(SMDSOM_Org$Hedges_SMDSOM_Org)
+Mean_SMDSOM_Org
+
+SMDSOM_Org$CI_lb<-SMDSOM_Org$Hedges_SMDSOM_Org-1.96*sqrt(SMDSOM_Org$Hedges_SMDSOM_Org_VARIANCE)
+SMDSOM_Org$CI_ub<-SMDSOM_Org$Hedges_SMDSOM_Org+1.96*sqrt(SMDSOM_Org$Hedges_SMDSOM_Org_VARIANCE)
+
+# 
+# 
+# ############### SOM_Min ###############
+# Note: None of the open access datasets had SOM_Min, so have put this on hold in the script
+
+# 
+# df_PLOT_LEVEL_SOM_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SOM_Min)),]
+# 
+# dfSummarySOM_Min<-df_PLOT_LEVEL_SOM_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SOM_Min), SDEV=sd(SOM_Min), SS=n())
+# 
+# dfSummarySOM_MinCTL <- dfSummarySOM_Min  %>% dplyr::filter(Treatment=="CTL")
+# dfSummarySOM_MinOTC <- dfSummarySOM_Min  %>% dplyr::filter(Treatment=="OTC")
+# dfSummarySOM_Min <- full_join(dfSummarySOM_MinCTL, dfSummarySOM_MinOTC, by="Dataset_ID")
+# 
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("MEAN.x"="MEAN_CTL"))
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("MEAN.y"="MEAN_OTC"))
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("SDEV.x"="SDEV_CTL"))
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("SDEV.y"="SDEV_OTC"))
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("SS.x"="SS_CTL"))
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("SS.y"="SS_OTC"))
+# 
+# SMDSOM_Min <-
+#   escalc("SMD", m1i = MEAN_OTC,
+#     n1i = SS_OTC,
+#     sd1i = SDEV_OTC,
+#     m2i = MEAN_CTL,
+#     n2i = SS_CTL,
+#     sd2i = SDEV_CTL,
+#     data = dfSummarySOM_Min 
+#   )
+# 
+# SMDSOM_Min<-plyr::rename(SMDSOM_Min,c("yi"="Hedges_SMDSOM_Min"))
+# SMDSOM_Min<-plyr::rename(SMDSOM_Min,c("vi"="Hedges_SMDSOM_Min_VARIANCE"))
+# 
+# CheckNA<-which(is.na(SMDSOM_Min$Hedges_SMDSOM_Min))
+# if(length(CheckNA)>0) {
+# SMDSOM_Min<-SMDSOM_Min[-which(is.na(SMDSOM_Min$Hedges_SMDSOM_Min)),]}
+# 
+# 
+# Mean_SMDSOM_Min<-mean(SMDSOM_Min$Hedges_SMDSOM_Min)
+# Mean_SMDSOM_Min
+# 
+# 
+# #Add confidence intervals
+# SMDSOM_Min$CI_lb<-SMDSOM_Min$Hedges_SMDSOM_Min-1.96*sqrt(SMDSOM_Min$Hedges_SMDSOM_Min_VARIANCE)
+# SMDSOM_Min$CI_ub<-SMDSOM_Min$Hedges_SMDSOM_Min+1.96*sqrt(SMDSOM_Min$Hedges_SMDSOM_Min_VARIANCE)
+# 
+# 
+
+
+
+
+
+############### SOC_Org ###############
+
+df_PLOT_LEVEL_SOC_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SOC_Org)),]
+
+dfSummarySOC_Org<-df_PLOT_LEVEL_SOC_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SOC_Org), SDEV=sd(SOC_Org), SS=n())
+
+dfSummarySOC_OrgCTL <- dfSummarySOC_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummarySOC_OrgOTC <- dfSummarySOC_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummarySOC_Org <- full_join(dfSummarySOC_OrgCTL, dfSummarySOC_OrgOTC, by="Dataset_ID")
+
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("SS.x"="SS_CTL"))
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("SS.y"="SS_OTC"))
+
+SMDSOC_Org <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarySOC_Org 
+  )
+
+SMDSOC_Org<-plyr::rename(SMDSOC_Org,c("yi"="Hedges_SMDSOC_Org"))
+SMDSOC_Org<-plyr::rename(SMDSOC_Org,c("vi"="Hedges_SMDSOC_Org_VARIANCE"))
+
+CheckNA<-which(is.na(SMDSOC_Org$Hedges_SMDSOC_Org))
+if(length(CheckNA)>0) {
+SMDSOC_Org<-SMDSOC_Org[-which(is.na(SMDSOC_Org$Hedges_SMDSOC_Org)),]}
+
+Mean_SMDSOC_Org<-mean(SMDSOC_Org$Hedges_SMDSOC_Org)
+Mean_SMDSOC_Org
+
+
+SMDSOC_Org$CI_lb<-SMDSOC_Org$Hedges_SMDSOC_Org-1.96*sqrt(SMDSOC_Org$Hedges_SMDSOC_Org_VARIANCE)
+SMDSOC_Org$CI_ub<-SMDSOC_Org$Hedges_SMDSOC_Org+1.96*sqrt(SMDSOC_Org$Hedges_SMDSOC_Org_VARIANCE)
+
+
+
+
+############### SOC_Min ###############
+
+df_PLOT_LEVEL_SOC_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SOC_Min)),]
+
+dfSummarySOC_Min<-df_PLOT_LEVEL_SOC_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SOC_Min), SDEV=sd(SOC_Min), SS=n())
+
+dfSummarySOC_MinCTL <- dfSummarySOC_Min  %>% dplyr::filter(Treatment=="CTL")
+dfSummarySOC_MinOTC <- dfSummarySOC_Min  %>% dplyr::filter(Treatment=="OTC")
+dfSummarySOC_Min <- full_join(dfSummarySOC_MinCTL, dfSummarySOC_MinOTC, by="Dataset_ID")
+
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("MEAN.x"="MEAN_CTL"))
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("MEAN.y"="MEAN_OTC"))
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("SDEV.x"="SDEV_CTL"))
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("SDEV.y"="SDEV_OTC"))
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("SS.x"="SS_CTL"))
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("SS.y"="SS_OTC"))
+
+SMDSOC_Min <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarySOC_Min 
+  )
+
+SMDSOC_Min<-plyr::rename(SMDSOC_Min,c("yi"="Hedges_SMDSOC_Min"))
+SMDSOC_Min<-plyr::rename(SMDSOC_Min,c("vi"="Hedges_SMDSOC_Min_VARIANCE"))
+
+CheckNA<-which(is.na(SMDSOC_Min$Hedges_SMDSOC_Min))
+if(length(CheckNA)>0) {
+SMDSOC_Min<-SMDSOC_Min[-which(is.na(SMDSOC_Min$Hedges_SMDSOC_Min)),]}
+
+Mean_SMDSOC_Min<-mean(SMDSOC_Min$Hedges_SMDSOC_Min)
+Mean_SMDSOC_Min
+
+
+SMDSOC_Min$CI_lb<-SMDSOC_Min$Hedges_SMDSOC_Min-1.96*sqrt(SMDSOC_Min$Hedges_SMDSOC_Min_VARIANCE)
+SMDSOC_Min$CI_ub<-SMDSOC_Min$Hedges_SMDSOC_Min+1.96*sqrt(SMDSOC_Min$Hedges_SMDSOC_Min_VARIANCE)
+
+
+
+
+
+
+############### SON_Org ###############
+
+df_PLOT_LEVEL_SON_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SON_Org)),]
+
+dfSummarySON_Org<-df_PLOT_LEVEL_SON_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SON_Org), SDEV=sd(SON_Org), SS=n())
+
+dfSummarySON_OrgCTL <- dfSummarySON_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummarySON_OrgOTC <- dfSummarySON_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummarySON_Org <- full_join(dfSummarySON_OrgCTL, dfSummarySON_OrgOTC, by="Dataset_ID")
+
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("SS.x"="SS_CTL"))
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("SS.y"="SS_OTC"))
+
+SMDSON_Org <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarySON_Org 
+  )
+
+SMDSON_Org<-plyr::rename(SMDSON_Org,c("yi"="Hedges_SMDSON_Org"))
+SMDSON_Org<-plyr::rename(SMDSON_Org,c("vi"="Hedges_SMDSON_Org_VARIANCE"))
+
+CheckNA<-which(is.na(SMDSON_Org$Hedges_SMDSON_Org))
+if(length(CheckNA)>0) {
+SMDSON_Org<-SMDSON_Org[-which(is.na(SMDSON_Org$Hedges_SMDSON_Org)),]}
+
+Mean_SMDSON_Org<-mean(SMDSON_Org$Hedges_SMDSON_Org)
+Mean_SMDSON_Org
+
+
+SMDSON_Org$CI_lb<-SMDSON_Org$Hedges_SMDSON_Org-1.96*sqrt(SMDSON_Org$Hedges_SMDSON_Org_VARIANCE)
+SMDSON_Org$CI_ub<-SMDSON_Org$Hedges_SMDSON_Org+1.96*sqrt(SMDSON_Org$Hedges_SMDSON_Org_VARIANCE)
+
+
+
+
+############### SON_Min ###############
+
+df_PLOT_LEVEL_SON_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SON_Min)),]
+
+dfSummarySON_Min<-df_PLOT_LEVEL_SON_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SON_Min), SDEV=sd(SON_Min), SS=n())
+
+dfSummarySON_MinCTL <- dfSummarySON_Min  %>% dplyr::filter(Treatment=="CTL")
+dfSummarySON_MinOTC <- dfSummarySON_Min  %>% dplyr::filter(Treatment=="OTC")
+dfSummarySON_Min <- full_join(dfSummarySON_MinCTL, dfSummarySON_MinOTC, by="Dataset_ID")
+
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("MEAN.x"="MEAN_CTL"))
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("MEAN.y"="MEAN_OTC"))
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("SDEV.x"="SDEV_CTL"))
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("SDEV.y"="SDEV_OTC"))
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("SS.x"="SS_CTL"))
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("SS.y"="SS_OTC"))
+
+SMDSON_Min <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarySON_Min 
+  )
+
+SMDSON_Min<-plyr::rename(SMDSON_Min,c("yi"="Hedges_SMDSON_Min"))
+SMDSON_Min<-plyr::rename(SMDSON_Min,c("vi"="Hedges_SMDSON_Min_VARIANCE"))
+
+CheckNA<-which(is.na(SMDSON_Min$Hedges_SMDSON_Min))
+if(length(CheckNA)>0) {
+SMDSON_Min<-SMDSON_Min[-which(is.na(SMDSON_Min$Hedges_SMDSON_Min)),]}
+
+Mean_SMDSON_Min<-mean(SMDSON_Min$Hedges_SMDSON_Min)
+Mean_SMDSON_Min
+
+
+SMDSON_Min$CI_lb<-SMDSON_Min$Hedges_SMDSON_Min-1.96*sqrt(SMDSON_Min$Hedges_SMDSON_Min_VARIANCE)
+SMDSON_Min$CI_ub<-SMDSON_Min$Hedges_SMDSON_Min+1.96*sqrt(SMDSON_Min$Hedges_SMDSON_Min_VARIANCE)
+
+
+
+############### CN_Org ###############
+
+df_PLOT_LEVEL_CN_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$CN_Org)),]
+
+dfSummaryCN_Org<-df_PLOT_LEVEL_CN_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(CN_Org), SDEV=sd(CN_Org), SS=n())
+
+dfSummaryCN_OrgCTL <- dfSummaryCN_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryCN_OrgOTC <- dfSummaryCN_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryCN_Org <- full_join(dfSummaryCN_OrgCTL, dfSummaryCN_OrgOTC, by="Dataset_ID")
+
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("SS.x"="SS_CTL"))
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("SS.y"="SS_OTC"))
+
+SMDCN_Org <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryCN_Org 
+  )
+
+SMDCN_Org<-plyr::rename(SMDCN_Org,c("yi"="Hedges_SMDCN_Org"))
+SMDCN_Org<-plyr::rename(SMDCN_Org,c("vi"="Hedges_SMDCN_Org_VARIANCE"))
+
+CheckNA<-which(is.na(SMDCN_Org$Hedges_SMDCN_Org))
+if(length(CheckNA)>0) {
+SMDCN_Org<-SMDCN_Org[-which(is.na(SMDCN_Org$Hedges_SMDCN_Org)),]}
+
+Mean_SMDCN_Org<-mean(SMDCN_Org$Hedges_SMDCN_Org)
+Mean_SMDCN_Org
+
+
+SMDCN_Org$CI_lb<-SMDCN_Org$Hedges_SMDCN_Org-1.96*sqrt(SMDCN_Org$Hedges_SMDCN_Org_VARIANCE)
+SMDCN_Org$CI_ub<-SMDCN_Org$Hedges_SMDCN_Org+1.96*sqrt(SMDCN_Org$Hedges_SMDCN_Org_VARIANCE)
+
+
+
+############### CN_Min ###############
+
+df_PLOT_LEVEL_CN_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$CN_Min)),]
+
+dfSummaryCN_Min<-df_PLOT_LEVEL_CN_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(CN_Min), SDEV=sd(CN_Min), SS=n())
+
+dfSummaryCN_MinCTL <- dfSummaryCN_Min  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryCN_MinOTC <- dfSummaryCN_Min  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryCN_Min <- full_join(dfSummaryCN_MinCTL, dfSummaryCN_MinOTC, by="Dataset_ID")
+
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("MEAN.x"="MEAN_CTL"))
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("MEAN.y"="MEAN_OTC"))
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("SDEV.x"="SDEV_CTL"))
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("SDEV.y"="SDEV_OTC"))
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("SS.x"="SS_CTL"))
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("SS.y"="SS_OTC"))
+
+SMDCN_Min <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryCN_Min 
+  )
+
+SMDCN_Min<-plyr::rename(SMDCN_Min,c("yi"="Hedges_SMDCN_Min"))
+SMDCN_Min<-plyr::rename(SMDCN_Min,c("vi"="Hedges_SMDCN_Min_VARIANCE"))
+
+CheckNA<-which(is.na(SMDCN_Min$Hedges_SMDCN_Min))
+if(length(CheckNA)>0) {
+SMDCN_Min<-SMDCN_Min[-which(is.na(SMDCN_Min$Hedges_SMDCN_Min)),]}
+
+Mean_SMDCN_Min<-mean(SMDCN_Min$Hedges_SMDCN_Min)
+Mean_SMDCN_Min
+
+
+SMDCN_Min$CI_lb<-SMDCN_Min$Hedges_SMDCN_Min-1.96*sqrt(SMDCN_Min$Hedges_SMDCN_Min_VARIANCE)
+SMDCN_Min$CI_ub<-SMDCN_Min$Hedges_SMDCN_Min+1.96*sqrt(SMDCN_Min$Hedges_SMDCN_Min_VARIANCE)
+
+
+
+
+
+
+
+############### pH_Org ###############
+
+df_PLOT_LEVEL_pH_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$pH_Org)),]
+
+dfSummarypH_Org<-df_PLOT_LEVEL_pH_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(pH_Org), SDEV=sd(pH_Org), SS=n())
+
+dfSummarypH_OrgCTL <- dfSummarypH_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummarypH_OrgOTC <- dfSummarypH_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummarypH_Org <- full_join(dfSummarypH_OrgCTL, dfSummarypH_OrgOTC, by="Dataset_ID")
+
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("SS.x"="SS_CTL"))
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("SS.y"="SS_OTC"))
+
+SMDpH_Org <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarypH_Org 
+  )
+
+SMDpH_Org<-plyr::rename(SMDpH_Org,c("yi"="Hedges_SMDpH_Org"))
+SMDpH_Org<-plyr::rename(SMDpH_Org,c("vi"="Hedges_SMDpH_Org_VARIANCE"))
+
+CheckNA<-which(is.na(SMDpH_Org$Hedges_SMDpH_Org))
+if(length(CheckNA)>0) {
+SMDpH_Org<-SMDpH_Org[-which(is.na(SMDpH_Org$Hedges_SMDpH_Org)),]}
+
+Mean_SMDpH_Org<-mean(SMDpH_Org$Hedges_SMDpH_Org)
+Mean_SMDpH_Org
+
+
+#Add confidence intervals
+SMDpH_Org$CI_lb<-SMDpH_Org$Hedges_SMDpH_Org-1.96*sqrt(SMDpH_Org$Hedges_SMDpH_Org_VARIANCE)
+SMDpH_Org$CI_ub<-SMDpH_Org$Hedges_SMDpH_Org+1.96*sqrt(SMDpH_Org$Hedges_SMDpH_Org_VARIANCE)
+
+
+
+# 
+# ############### pH_Min ###############
+# # Note: None of the open access datasets had SOM_Min, so have put this on hold in the script
+# 
+# df_PLOT_LEVEL_pH_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$pH_Min)),]
+# 
+# dfSummarypH_Min<-df_PLOT_LEVEL_pH_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(pH_Min), SDEV=sd(pH_Min), SS=n())
+# 
+# dfSummarypH_MinCTL <- dfSummarypH_Min  %>% dplyr::filter(Treatment=="CTL")
+# dfSummarypH_MinOTC <- dfSummarypH_Min  %>% dplyr::filter(Treatment=="OTC")
+# dfSummarypH_Min <- full_join(dfSummarypH_MinCTL, dfSummarypH_MinOTC, by="Dataset_ID")
+# 
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("MEAN.x"="MEAN_CTL"))
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("MEAN.y"="MEAN_OTC"))
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("SDEV.x"="SDEV_CTL"))
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("SDEV.y"="SDEV_OTC"))
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("SS.x"="SS_CTL"))
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("SS.y"="SS_OTC"))
+# 
+# SMDpH_Min <-
+#   escalc("SMD", m1i = MEAN_OTC,
+#     n1i = SS_OTC,
+#     sd1i = SDEV_OTC,
+#     m2i = MEAN_CTL,
+#     n2i = SS_CTL,
+#     sd2i = SDEV_CTL,
+#     data = dfSummarypH_Min 
+#   )
+# 
+# SMDpH_Min<-plyr::rename(SMDpH_Min,c("yi"="Hedges_SMDpH_Min"))
+# SMDpH_Min<-plyr::rename(SMDpH_Min,c("vi"="Hedges_SMDpH_Min_VARIANCE"))
+# 
+# CheckNA<-which(is.na(SMDpH_Min$Hedges_SMDpH_Min))
+# if(length(CheckNA)>0) {
+# SMDpH_Min<-SMDpH_Min[-which(is.na(SMDpH_Min$Hedges_SMDpH_Min)),]}
+# 
+# Mean_SMDpH_Min<-mean(SMDpH_Min$Hedges_SMDpH_Min)
+# Mean_SMDpH_Min
+# 
+# 
+# SMDpH_Min$CI_lb<-SMDpH_Min$Hedges_SMDpH_Min-1.96*sqrt(SMDpH_Min$Hedges_SMDpH_Min_VARIANCE)
+# SMDpH_Min$CI_ub<-SMDpH_Min$Hedges_SMDpH_Min+1.96*sqrt(SMDpH_Min$Hedges_SMDpH_Min_VARIANCE)
+# 
+# 
+
+
+
+
+
+############### BD_Org ###############
+
+df_PLOT_LEVEL_BD_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$BD_Org)),]
+
+dfSummaryBD_Org<-df_PLOT_LEVEL_BD_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(BD_Org), SDEV=sd(BD_Org), SS=n())
+
+dfSummaryBD_OrgCTL <- dfSummaryBD_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryBD_OrgOTC <- dfSummaryBD_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryBD_Org <- full_join(dfSummaryBD_OrgCTL, dfSummaryBD_OrgOTC, by="Dataset_ID")
+
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("SS.x"="SS_CTL"))
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("SS.y"="SS_OTC"))
+
+SMDBD_Org <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryBD_Org 
+  )
+
+SMDBD_Org<-plyr::rename(SMDBD_Org,c("yi"="Hedges_SMDBD_Org"))
+SMDBD_Org<-plyr::rename(SMDBD_Org,c("vi"="Hedges_SMDBD_Org_VARIANCE"))
+
+CheckNA<-which(is.na(SMDBD_Org$Hedges_SMDBD_Org))
+if(length(CheckNA)>0) {
+SMDBD_Org<-SMDBD_Org[-which(is.na(SMDBD_Org$Hedges_SMDBD_Org)),]}
+
+Mean_SMDBD_Org<-mean(SMDBD_Org$Hedges_SMDBD_Org)
+Mean_SMDBD_Org
+
+
+SMDBD_Org$CI_lb<-SMDBD_Org$Hedges_SMDBD_Org-1.96*sqrt(SMDBD_Org$Hedges_SMDBD_Org_VARIANCE)
+SMDBD_Org$CI_ub<-SMDBD_Org$Hedges_SMDBD_Org+1.96*sqrt(SMDBD_Org$Hedges_SMDBD_Org_VARIANCE)
+
+
+
+
+############### BD_Min ###############
+
+df_PLOT_LEVEL_BD_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$BD_Min)),]
+
+dfSummaryBD_Min<-df_PLOT_LEVEL_BD_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(BD_Min), SDEV=sd(BD_Min), SS=n())
+
+dfSummaryBD_MinCTL <- dfSummaryBD_Min  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryBD_MinOTC <- dfSummaryBD_Min  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryBD_Min <- full_join(dfSummaryBD_MinCTL, dfSummaryBD_MinOTC, by="Dataset_ID")
+
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("MEAN.x"="MEAN_CTL"))
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("MEAN.y"="MEAN_OTC"))
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("SDEV.x"="SDEV_CTL"))
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("SDEV.y"="SDEV_OTC"))
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("SS.x"="SS_CTL"))
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("SS.y"="SS_OTC"))
+
+SMDBD_Min <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryBD_Min 
+  )
+
+SMDBD_Min<-plyr::rename(SMDBD_Min,c("yi"="Hedges_SMDBD_Min"))
+SMDBD_Min<-plyr::rename(SMDBD_Min,c("vi"="Hedges_SMDBD_Min_VARIANCE"))
+
+CheckNA<-which(is.na(SMDBD_Min$Hedges_SMDBD_Min))
+if(length(CheckNA)>0) {
+SMDBD_Min<-SMDBD_Min[-which(is.na(SMDBD_Min$Hedges_SMDBD_Min)),]}
+
+Mean_SMDBD_Min<-mean(SMDBD_Min$Hedges_SMDBD_Min)
+Mean_SMDBD_Min
+
+
+SMDBD_Min$CI_lb<-SMDBD_Min$Hedges_SMDBD_Min-1.96*sqrt(SMDBD_Min$Hedges_SMDBD_Min_VARIANCE)
+SMDBD_Min$CI_ub<-SMDBD_Min$Hedges_SMDBD_Min+1.96*sqrt(SMDBD_Min$Hedges_SMDBD_Min_VARIANCE)
+
+
+
+
+# ############### OL_D_Plot ###############
+# 
+df_PLOT_LEVEL<-plyr::rename(df_PLOT_LEVEL,c("OL_D"="OL_D_Plot")) #rename to avoid confusion with site vs plot level
+
+df_PLOT_LEVEL_OL_D_Plot<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$OL_D_Plot)),]
+
+dfSummaryOL_D_Plot<-df_PLOT_LEVEL_OL_D_Plot %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(OL_D_Plot), SDEV=sd(OL_D_Plot), SS=n())
+
+dfSummaryOL_D_PlotCTL <- dfSummaryOL_D_Plot  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryOL_D_PlotOTC <- dfSummaryOL_D_Plot  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryOL_D_Plot <- full_join(dfSummaryOL_D_PlotCTL, dfSummaryOL_D_PlotOTC, by="Dataset_ID")
+
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("MEAN.x"="MEAN_CTL"))
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("MEAN.y"="MEAN_OTC"))
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("SDEV.x"="SDEV_CTL"))
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("SDEV.y"="SDEV_OTC"))
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("SS.x"="SS_CTL"))
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("SS.y"="SS_OTC"))
+
+SMDOL_D_Plot <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryOL_D_Plot
+  )
+
+SMDOL_D_Plot<-plyr::rename(SMDOL_D_Plot,c("yi"="Hedges_SMDOL_D_Plot"))
+SMDOL_D_Plot<-plyr::rename(SMDOL_D_Plot,c("vi"="Hedges_SMDOL_D_Plot_VARIANCE"))
+
+SMDOL_D_Plot<-SMDOL_D_Plot[-which(is.na(SMDOL_D_Plot$Hedges_SMDOL_D_Plot)),]
+
+Mean_SMDOL_D_Plot<-mean(SMDOL_D_Plot$Hedges_SMDOL_D_Plot)
+Mean_SMDOL_D_Plot
+
+
+SMDOL_D_Plot$CI_lb<-SMDOL_D_Plot$Hedges_SMDOL_D_Plot-1.96*sqrt(SMDOL_D_Plot$Hedges_SMDOL_D_Plot_VARIANCE)
+SMDOL_D_Plot$CI_ub<-SMDOL_D_Plot$Hedges_SMDOL_D_Plot+1.96*sqrt(SMDOL_D_Plot$Hedges_SMDOL_D_Plot_VARIANCE) 
+# 
+# # 
+# 
+# # https://stackoverflow.com/questions/38000128/set-separator-in-write-csv
+# write.csv(dfSummaryBD_Min, "dfSummaryBD_Min.csv")
+# write.csv(dfSummaryBD_Org, "dfSummaryBD_Org.csv")
+# write.csv(dfSummaryCN_Min, "dfSummaryCN_Min.csv")
+# write.csv(dfSummaryCN_Org, "dfSummaryCN_Org.csv")
+# write.csv(dfSummaryOL_D_Plot, "dfSummaryOL_D_Plot.csv")
+# # write.csv(dfSummarypH_Min, "dfSummarypH_Min.csv")
+# write.csv(dfSummarypH_Org, "dfSummarypH_Org.csv")
+# write.csv(dfSummarySOC_Min, "dfSummarySOC_Min.csv")
+# write.csv(dfSummarySOC_Org, "dfSummarySOC_Org.csv")
+# # write.csv(dfSummarySOM_Min, "dfSummarySOM_Min.csv")
+# write.csv(dfSummarySOM_Org, "dfSummarySOM_Org.csv")
+# write.csv(dfSummarySON_Min, "dfSummarySON_Min.csv")
+# write.csv(dfSummarySON_Org, "dfSummarySON_Org.csv")
+#
+write.csv(SMDBD_Min, "SMDBD_Min.csv")
+write.csv(SMDBD_Org, "SMDBD_Org.csv")
+write.csv(SMDCN_Min, "SMDCN_Min.csv")
+write.csv(SMDCN_Org, "SMDCN_Org.csv")
+write.csv(SMDOL_D_Plot, "SMDOL_D_Plot.csv")
+# write.csv(SMDpH_Min, "SMDpH_Min.csv")
+write.csv(SMDpH_Org, "SMDpH_Org.csv")
+write.csv(SMDSOC_Min, "SMDSOC_Min.csv")
+write.csv(SMDSOC_Org, "SMDSOC_Org.csv")
+# write.csv(SMDSOM_Min, "SMDSOM_Min.csv")
+write.csv(SMDSOM_Org, "SMDSOM_Org.csv")
+write.csv(SMDSON_Min, "SMDSON_Min.csv")
+write.csv(SMDSON_Org, "SMDSON_Org.csv")
+
+```
+
+
+##vegetation
+
+```{r vegetation, warnings=FALSE, echo=FALSE, message=FALSE}
+
+
+############### Graminoids ###############
+df_PLOT_LEVEL_Graminoids<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Graminoids)),]
+dfSummaryGraminoids<-df_PLOT_LEVEL_Graminoids %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Graminoids), SDEV=sd(Graminoids), SS=n())
+
+dfSummaryGraminoidsCTL <- dfSummaryGraminoids  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryGraminoidsOTC <- dfSummaryGraminoids  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryGraminoids <- full_join(dfSummaryGraminoidsCTL, dfSummaryGraminoidsOTC, by="Dataset_ID")
+
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("MEAN.x"="MEAN_CTL"))
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("MEAN.y"="MEAN_OTC"))
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("SDEV.x"="SDEV_CTL"))
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("SDEV.y"="SDEV_OTC"))
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("SS.x"="SS_CTL"))
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("SS.y"="SS_OTC"))
+
+SMDGraminoids <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryGraminoids 
+  )
+
+SMDGraminoids<-plyr::rename(SMDGraminoids,c("yi"="Hedges_SMDGraminoids"))
+SMDGraminoids<-plyr::rename(SMDGraminoids,c("vi"="Hedges_SMDGraminoids_VARIANCE"))
+
+CheckNA<-which(is.na(SMDGraminoids$Hedges_SMDGraminoids))
+if(length(CheckNA)>0) {
+SMDGraminoids<-SMDGraminoids[-which(is.na(SMDGraminoids$Hedges_SMDGraminoids)),]}
+
+Mean_SMDGraminoids<-mean(SMDGraminoids$Hedges_SMDGraminoids)
+Mean_SMDGraminoids
+
+SMDGraminoids$CI_lb<-SMDGraminoids$Hedges_SMDGraminoids-1.96*sqrt(SMDGraminoids$Hedges_SMDGraminoids_VARIANCE)
+SMDGraminoids$CI_ub<-SMDGraminoids$Hedges_SMDGraminoids+1.96*sqrt(SMDGraminoids$Hedges_SMDGraminoids_VARIANCE)
+
+
+
+############### Forbs ###############
+
+df_PLOT_LEVEL_Forbs<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Forbs)),]
+
+dfSummaryForbs<-df_PLOT_LEVEL_Forbs %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Forbs), SDEV=sd(Forbs), SS=n())
+
+dfSummaryForbsCTL <- dfSummaryForbs  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryForbsOTC <- dfSummaryForbs  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryForbs <- full_join(dfSummaryForbsCTL, dfSummaryForbsOTC, by="Dataset_ID")
+
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("MEAN.x"="MEAN_CTL"))
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("MEAN.y"="MEAN_OTC"))
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("SDEV.x"="SDEV_CTL"))
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("SDEV.y"="SDEV_OTC"))
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("SS.x"="SS_CTL"))
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("SS.y"="SS_OTC"))
+
+SMDForbs <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryForbs 
+  )
+
+SMDForbs<-plyr::rename(SMDForbs,c("yi"="Hedges_SMDForbs"))
+SMDForbs<-plyr::rename(SMDForbs,c("vi"="Hedges_SMDForbs_VARIANCE"))
+
+SMDForbs<-SMDForbs[-which(is.na(SMDForbs$Hedges_SMDForbs)),]
+
+Mean_SMDForbs<-mean(SMDForbs$Hedges_SMDForbs)
+Mean_SMDForbs
+
+SMDForbs$CI_lb<-SMDForbs$Hedges_SMDForbs-1.96*sqrt(SMDForbs$Hedges_SMDForbs_VARIANCE)
+SMDForbs$CI_ub<-SMDForbs$Hedges_SMDForbs+1.96*sqrt(SMDForbs$Hedges_SMDForbs_VARIANCE)
+
+
+############### Decid_Shrubs ###############
+
+df_PLOT_LEVEL_Decid_Shrubs<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Decid_Shrubs)),]
+
+dfSummaryDecid_Shrubs<-df_PLOT_LEVEL_Decid_Shrubs %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Decid_Shrubs), SDEV=sd(Decid_Shrubs), SS=n())
+
+dfSummaryDecid_ShrubsCTL <- dfSummaryDecid_Shrubs  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryDecid_ShrubsOTC <- dfSummaryDecid_Shrubs  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryDecid_Shrubs <- full_join(dfSummaryDecid_ShrubsCTL, dfSummaryDecid_ShrubsOTC, by="Dataset_ID")
+
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("MEAN.x"="MEAN_CTL"))
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("MEAN.y"="MEAN_OTC"))
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("SDEV.x"="SDEV_CTL"))
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("SDEV.y"="SDEV_OTC"))
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("SS.x"="SS_CTL"))
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("SS.y"="SS_OTC"))
+
+SMDDecid_Shrubs <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryDecid_Shrubs 
+  )
+
+SMDDecid_Shrubs<-plyr::rename(SMDDecid_Shrubs,c("yi"="Hedges_SMDDecid_Shrubs"))
+SMDDecid_Shrubs<-plyr::rename(SMDDecid_Shrubs,c("vi"="Hedges_SMDDecid_Shrubs_VARIANCE"))
+
+CheckNA<-which(is.na(SMDDecid_Shrubs$Hedges_SMDDecid_Shrubs))
+if(length(CheckNA)>0) {
+SMDDecid_Shrubs<-SMDDecid_Shrubs[-which(is.na(SMDDecid_Shrubs$Hedges_SMDDecid_Shrubs)),]}
+
+Mean_SMDDecid_Shrubs<-mean(SMDDecid_Shrubs$Hedges_SMDDecid_Shrubs)
+Mean_SMDDecid_Shrubs
+
+SMDDecid_Shrubs$CI_lb<-SMDDecid_Shrubs$Hedges_SMDDecid_Shrubs-1.96*sqrt(SMDDecid_Shrubs$Hedges_SMDDecid_Shrubs_VARIANCE)
+SMDDecid_Shrubs$CI_ub<-SMDDecid_Shrubs$Hedges_SMDDecid_Shrubs+1.96*sqrt(SMDDecid_Shrubs$Hedges_SMDDecid_Shrubs_VARIANCE)
+
+
+
+############### Evergr_Shrubs ###############
+
+df_PLOT_LEVEL_Evergr_Shrubs<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Evergr_Shrubs)),]
+
+dfSummaryEvergr_Shrubs<-df_PLOT_LEVEL_Evergr_Shrubs %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Evergr_Shrubs), SDEV=sd(Evergr_Shrubs), SS=n())
+
+dfSummaryEvergr_ShrubsCTL <- dfSummaryEvergr_Shrubs  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryEvergr_ShrubsOTC <- dfSummaryEvergr_Shrubs  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryEvergr_Shrubs <- full_join(dfSummaryEvergr_ShrubsCTL, dfSummaryEvergr_ShrubsOTC, by="Dataset_ID")
+
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("MEAN.x"="MEAN_CTL"))
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("MEAN.y"="MEAN_OTC"))
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("SDEV.x"="SDEV_CTL"))
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("SDEV.y"="SDEV_OTC"))
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("SS.x"="SS_CTL"))
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("SS.y"="SS_OTC"))
+
+SMDEvergr_Shrubs <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryEvergr_Shrubs 
+  )
+
+SMDEvergr_Shrubs<-plyr::rename(SMDEvergr_Shrubs,c("yi"="Hedges_SMDEvergr_Shrubs"))
+SMDEvergr_Shrubs<-plyr::rename(SMDEvergr_Shrubs,c("vi"="Hedges_SMDEvergr_Shrubs_VARIANCE"))
+
+
+CheckNA<-which(is.na(SMDEvergr_Shrubs$Hedges_SMDEvergr_Shrubs))
+if(length(CheckNA)>0) {
+SMDEvergr_Shrubs<-SMDEvergr_Shrubs[-which(is.na(SMDEvergr_Shrubs$Hedges_SMDEvergr_Shrubs)),]}
+
+Mean_SMDEvergr_Shrubs<-mean(SMDEvergr_Shrubs$Hedges_SMDEvergr_Shrubs)
+Mean_SMDEvergr_Shrubs
+
+
+SMDEvergr_Shrubs$CI_lb<-SMDEvergr_Shrubs$Hedges_SMDEvergr_Shrubs-1.96*sqrt(SMDEvergr_Shrubs$Hedges_SMDEvergr_Shrubs_VARIANCE)
+SMDEvergr_Shrubs$CI_ub<-SMDEvergr_Shrubs$Hedges_SMDEvergr_Shrubs+1.96*sqrt(SMDEvergr_Shrubs$Hedges_SMDEvergr_Shrubs_VARIANCE)
+
+
+
+############### Mosses ###############
+
+df_PLOT_LEVEL_Mosses<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Mosses)),]
+
+dfSummaryMosses<-df_PLOT_LEVEL_Mosses %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Mosses), SDEV=sd(Mosses), SS=n())
+
+dfSummaryMossesCTL <- dfSummaryMosses  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryMossesOTC <- dfSummaryMosses  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryMosses <- full_join(dfSummaryMossesCTL, dfSummaryMossesOTC, by="Dataset_ID")
+
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("MEAN.x"="MEAN_CTL"))
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("MEAN.y"="MEAN_OTC"))
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("SDEV.x"="SDEV_CTL"))
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("SDEV.y"="SDEV_OTC"))
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("SS.x"="SS_CTL"))
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("SS.y"="SS_OTC"))
+
+SMDMosses <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryMosses 
+  )
+
+SMDMosses<-plyr::rename(SMDMosses,c("yi"="Hedges_SMDMosses"))
+SMDMosses<-plyr::rename(SMDMosses,c("vi"="Hedges_SMDMosses_VARIANCE"))
+
+
+CheckNA<-which(is.na(SMDMosses$Hedges_SMDMosses))
+if(length(CheckNA)>0) {
+SMDMosses<-SMDMosses[-which(is.na(SMDMosses$Hedges_SMDMosses)),]}
+
+Mean_SMDMosses<-mean(SMDMosses$Hedges_SMDMosses)
+Mean_SMDMosses
+
+
+SMDMosses$CI_lb<-SMDMosses$Hedges_SMDMosses-1.96*sqrt(SMDMosses$Hedges_SMDMosses_VARIANCE)
+SMDMosses$CI_ub<-SMDMosses$Hedges_SMDMosses+1.96*sqrt(SMDMosses$Hedges_SMDMosses_VARIANCE)
+
+
+
+
+
+############### Lichens ###############
+
+df_PLOT_LEVEL_Lichens<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Lichens)),]
+
+dfSummaryLichens<-df_PLOT_LEVEL_Lichens %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Lichens), SDEV=sd(Lichens), SS=n())
+
+dfSummaryLichensCTL <- dfSummaryLichens  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryLichensOTC <- dfSummaryLichens  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryLichens <- full_join(dfSummaryLichensCTL, dfSummaryLichensOTC, by="Dataset_ID")
+
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("MEAN.x"="MEAN_CTL"))
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("MEAN.y"="MEAN_OTC"))
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("SDEV.x"="SDEV_CTL"))
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("SDEV.y"="SDEV_OTC"))
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("SS.x"="SS_CTL"))
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("SS.y"="SS_OTC"))
+
+SMDLichens <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryLichens 
+  )
+
+SMDLichens<-plyr::rename(SMDLichens,c("yi"="Hedges_SMDLichens"))
+SMDLichens<-plyr::rename(SMDLichens,c("vi"="Hedges_SMDLichens_VARIANCE"))
+
+SMDLichens<-SMDLichens[-which(is.na(SMDLichens$Hedges_SMDLichens)),]
+
+Mean_SMDLichens<-mean(SMDLichens$Hedges_SMDLichens)
+Mean_SMDLichens
+
+
+
+
+
+############### BM ###############
+
+df_PLOT_LEVEL_BM<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$BM)),]
+
+dfSummaryBM<-df_PLOT_LEVEL_BM %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(BM), SDEV=sd(BM), SS=n())
+
+dfSummaryBMCTL <- dfSummaryBM  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryBMOTC <- dfSummaryBM  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryBM <- full_join(dfSummaryBMCTL, dfSummaryBMOTC, by="Dataset_ID")
+
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("MEAN.x"="MEAN_CTL"))
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("MEAN.y"="MEAN_OTC"))
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("SDEV.x"="SDEV_CTL"))
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("SDEV.y"="SDEV_OTC"))
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("SS.x"="SS_CTL"))
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("SS.y"="SS_OTC"))
+
+SMDBM <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryBM 
+  )
+
+SMDBM<-plyr::rename(SMDBM,c("yi"="Hedges_SMDBM"))
+SMDBM<-plyr::rename(SMDBM,c("vi"="Hedges_SMDBM_VARIANCE"))
+
+
+CheckNA<-which(is.na(SMDBM$Hedges_SMDBM))
+if(length(CheckNA)>0) {
+SMDBM<-SMDBM[-which(is.na(SMDBM$Hedges_SMDBM)),]}
+
+Mean_SMDBM<-mean(SMDBM$Hedges_SMDBM)
+Mean_SMDBM
+
+
+#Add confidence intervals
+SMDBM$CI_lb<-SMDBM$Hedges_SMDBM-1.96*sqrt(SMDBM$Hedges_SMDBM_VARIANCE)
+SMDBM$CI_ub<-SMDBM$Hedges_SMDBM+1.96*sqrt(SMDBM$Hedges_SMDBM_VARIANCE)
+
+
+
+
+
+
+############### Mean_H ###############
+
+df_PLOT_LEVEL_Mean_H<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Mean_H)),]
+
+dfSummaryMean_H<-df_PLOT_LEVEL_Mean_H %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Mean_H), SDEV=sd(Mean_H), SS=n())
+
+dfSummaryMean_HCTL <- dfSummaryMean_H  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryMean_HOTC <- dfSummaryMean_H  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryMean_H <- full_join(dfSummaryMean_HCTL, dfSummaryMean_HOTC, by="Dataset_ID")
+
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("MEAN.x"="MEAN_CTL"))
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("MEAN.y"="MEAN_OTC"))
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("SDEV.x"="SDEV_CTL"))
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("SDEV.y"="SDEV_OTC"))
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("SS.x"="SS_CTL"))
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("SS.y"="SS_OTC"))
+
+SMDMean_H <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryMean_H 
+  )
+
+SMDMean_H<-plyr::rename(SMDMean_H,c("yi"="Hedges_SMDMean_H"))
+SMDMean_H<-plyr::rename(SMDMean_H,c("vi"="Hedges_SMDMean_H_VARIANCE"))
+
+
+CheckNA<-which(is.na(SMDMean_H$Hedges_SMDMean_H))
+if(length(CheckNA)>0) {
+SMDMean_H<-SMDMean_H[-which(is.na(SMDMean_H$Hedges_SMDMean_H)),]}
+
+Mean_SMDMean_H<-mean(SMDMean_H$Hedges_SMDMean_H)
+Mean_SMDMean_H
+
+SMDMean_H$CI_lb<-SMDMean_H$Hedges_SMDMean_H-1.96*sqrt(SMDMean_H$Hedges_SMDMean_H_VARIANCE)
+SMDMean_H$CI_ub<-SMDMean_H$Hedges_SMDMean_H+1.96*sqrt(SMDMean_H$Hedges_SMDMean_H_VARIANCE)
+
+
+# 
+write.csv(dfSummaryMean_H, "dfSummaryMean_H.csv")
+write.csv(dfSummaryBM, "dfSummaryBM.csv")
+write.csv(dfSummaryGraminoids, "dfSummaryGraminoids.csv")
+write.csv(dfSummaryForbs, "dfSummaryForbs.csv")
+write.csv(dfSummaryEvergr_Shrubs, "dfSummaryEvergr_Shrubs.csv")
+write.csv(dfSummaryDecid_Shrubs, "dfSummaryDecid_Shrubs.csv")
+write.csv(dfSummaryMosses, "dfSummaryMosses.csv")
+write.csv(dfSummaryLichens, "dfSummaryLichens.csv")
+#
+#
+write.csv(SMDGraminoids, "SMDGraminoids.csv")
+write.csv(SMDForbs, "SMDForbs.csv")
+write.csv(SMDDecid_Shrubs, "SMDDecid_Shrubs.csv")
+write.csv(SMDEvergr_Shrubs, "SMDEvergr_Shrubs.csv")
+write.csv(SMDMosses, "SMDMosses.csv")
+write.csv(SMDLichens, "SMDLichens.csv")
+write.csv(SMDBM, "SMDBM.csv")
+write.csv(SMDMean_H, "SMDMean_H.csv")
+# #
+
+
+```
+
+
+##microbial
+
+```{r microbial, echo=FALSE}
+
+############### Bacterial_BM_Weight ###############
+
+df_PLOT_LEVEL_Bacterial_BM_Weight<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Bacterial_BM_Weight)),]
+
+dfSummaryBacterial_BM_Weight<-df_PLOT_LEVEL_Bacterial_BM_Weight %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Bacterial_BM_Weight), SDEV=sd(Bacterial_BM_Weight), SS=n())
+
+dfSummaryBacterial_BM_WeightCTL <- dfSummaryBacterial_BM_Weight  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryBacterial_BM_WeightOTC <- dfSummaryBacterial_BM_Weight  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryBacterial_BM_Weight <- full_join(dfSummaryBacterial_BM_WeightCTL, dfSummaryBacterial_BM_WeightOTC, by="Dataset_ID")
+
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("MEAN.x"="MEAN_CTL"))
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("MEAN.y"="MEAN_OTC"))
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("SDEV.x"="SDEV_CTL"))
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("SDEV.y"="SDEV_OTC"))
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("SS.x"="SS_CTL"))
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("SS.y"="SS_OTC"))
+
+SMDBacterial_BM_Weight <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryBacterial_BM_Weight 
+  )
+
+SMDBacterial_BM_Weight<-plyr::rename(SMDBacterial_BM_Weight,c("yi"="Hedges_SMDBacterial_BM_Weight"))
+SMDBacterial_BM_Weight<-plyr::rename(SMDBacterial_BM_Weight,c("vi"="Hedges_SMDBacterial_BM_Weight_VARIANCE"))
+
+
+CheckNA<-which(is.na(SMDBacterial_BM_Weight$Hedges_SMDBacterial_BM_Weight))
+if(length(CheckNA)>0) {
+SMDBacterial_BM_Weight<-SMDBacterial_BM_Weight[-which(is.na(SMDBacterial_BM_Weight$Hedges_SMDBacterial_BM_Weight)),]}
+
+Mean_SMDBacterial_BM_Weight<-mean(SMDBacterial_BM_Weight$Hedges_SMDBacterial_BM_Weight)
+Mean_SMDBacterial_BM_Weight
+
+
+SMDBacterial_BM_Weight$CI_lb<-SMDBacterial_BM_Weight$Hedges_SMDBacterial_BM_Weight-1.96*sqrt(SMDBacterial_BM_Weight$Hedges_SMDBacterial_BM_Weight_VARIANCE)
+SMDBacterial_BM_Weight$CI_ub<-SMDBacterial_BM_Weight$Hedges_SMDBacterial_BM_Weight+1.96*sqrt(SMDBacterial_BM_Weight$Hedges_SMDBacterial_BM_Weight_VARIANCE)
+
+
+
+############### Fungal_BM_Weight ###############
+
+df_PLOT_LEVEL_Fungal_BM_Weight<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Fungal_BM_Weight)),]
+
+dfSummaryFungal_BM_Weight<-df_PLOT_LEVEL_Fungal_BM_Weight %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Fungal_BM_Weight), SDEV=sd(Fungal_BM_Weight), SS=n())
+
+dfSummaryFungal_BM_WeightCTL <- dfSummaryFungal_BM_Weight  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryFungal_BM_WeightOTC <- dfSummaryFungal_BM_Weight  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryFungal_BM_Weight <- full_join(dfSummaryFungal_BM_WeightCTL, dfSummaryFungal_BM_WeightOTC, by="Dataset_ID")
+
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("MEAN.x"="MEAN_CTL"))
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("MEAN.y"="MEAN_OTC"))
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("SDEV.x"="SDEV_CTL"))
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("SDEV.y"="SDEV_OTC"))
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("SS.x"="SS_CTL"))
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("SS.y"="SS_OTC"))
+
+SMDFungal_BM_Weight <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryFungal_BM_Weight 
+  )
+
+SMDFungal_BM_Weight<-plyr::rename(SMDFungal_BM_Weight,c("yi"="Hedges_SMDFungal_BM_Weight"))
+SMDFungal_BM_Weight<-plyr::rename(SMDFungal_BM_Weight,c("vi"="Hedges_SMDFungal_BM_Weight_VARIANCE"))
+
+
+CheckNA<-which(is.na(SMDFungal_BM_Weight$Hedges_SMDFungal_BM_Weight))
+if(length(CheckNA)>0) {
+SMDFungal_BM_Weight<-SMDFungal_BM_Weight[-which(is.na(SMDFungal_BM_Weight$Hedges_SMDFungal_BM_Weight)),]}
+
+Mean_SMDFungal_BM_Weight<-mean(SMDFungal_BM_Weight$Hedges_SMDFungal_BM_Weight)
+Mean_SMDFungal_BM_Weight
+
+
+#Add confidence intervals
+SMDFungal_BM_Weight$CI_lb<-SMDFungal_BM_Weight$Hedges_SMDFungal_BM_Weight-1.96*sqrt(SMDFungal_BM_Weight$Hedges_SMDFungal_BM_Weight_VARIANCE)
+SMDFungal_BM_Weight$CI_ub<-SMDFungal_BM_Weight$Hedges_SMDFungal_BM_Weight+1.96*sqrt(SMDFungal_BM_Weight$Hedges_SMDFungal_BM_Weight_VARIANCE)
+
+
+
+
+
+############### FB_Ratio ###############
+
+df_PLOT_LEVEL_FB_Ratio<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$FB_Ratio)),]
+
+dfSummaryFB_Ratio<-df_PLOT_LEVEL_FB_Ratio %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(FB_Ratio), SDEV=sd(FB_Ratio), SS=n())
+
+dfSummaryFB_RatioCTL <- dfSummaryFB_Ratio  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryFB_RatioOTC <- dfSummaryFB_Ratio  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryFB_Ratio <- full_join(dfSummaryFB_RatioCTL, dfSummaryFB_RatioOTC, by="Dataset_ID")
+
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("MEAN.x"="MEAN_CTL"))
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("MEAN.y"="MEAN_OTC"))
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("SDEV.x"="SDEV_CTL"))
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("SDEV.y"="SDEV_OTC"))
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("SS.x"="SS_CTL"))
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("SS.y"="SS_OTC"))
+
+SMDFB_Ratio <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryFB_Ratio 
+  )
+
+SMDFB_Ratio<-plyr::rename(SMDFB_Ratio,c("yi"="Hedges_SMDFB_Ratio"))
+SMDFB_Ratio<-plyr::rename(SMDFB_Ratio,c("vi"="Hedges_SMDFB_Ratio_VARIANCE"))
+
+
+CheckNA<-which(is.na(SMDFB_Ratio$Hedges_SMDFB_Ratio))
+if(length(CheckNA)>0) {
+SMDFB_Ratio<-SMDFB_Ratio[-which(is.na(SMDFB_Ratio$Hedges_SMDFB_Ratio)),]}
+
+Mean_SMDFB_Ratio<-mean(SMDFB_Ratio$Hedges_SMDFB_Ratio)
+Mean_SMDFB_Ratio
+
+
+SMDFB_Ratio$CI_lb<-SMDFB_Ratio$Hedges_SMDFB_Ratio-1.96*sqrt(SMDFB_Ratio$Hedges_SMDFB_Ratio_VARIANCE)
+SMDFB_Ratio$CI_ub<-SMDFB_Ratio$Hedges_SMDFB_Ratio+1.96*sqrt(SMDFB_Ratio$Hedges_SMDFB_Ratio_VARIANCE)
+
+# 
+write.csv(dfSummaryBacterial_BM_Weight, "dfSummaryBacterial_BM_Weight.csv")
+write.csv(dfSummaryFungal_BM_Weight, "dfSummaryFungal_BM_Weight.csv")
+write.csv(dfSummaryFB_Ratio, "dfSummaryFB_Ratio.csv")
+
+write.csv(SMDBacterial_BM_Weight, "SMDBacterial_BM_Weight.csv")
+write.csv(SMDFungal_BM_Weight, "SMDFungal_BM_Weight.csv")
+write.csv(SMDFB_Ratio, "SMDFB_Ratio.csv")
+
+```
+
+
+
+## overview df
+
+```{r  Merge climate, soil, vegetation, microbial drivers into 1 df: define factors }
+# dir()
+SMDAT$Dataset_ID<-as.factor(SMDAT$Dataset_ID)
+SMDST$Dataset_ID<-as.factor(SMDST$Dataset_ID)
+SMDSM$Dataset_ID<-as.factor(SMDSM$Dataset_ID)
+
+SMDSOM_Org$Dataset_ID<-as.factor(SMDSOM_Org$Dataset_ID)
+# SMDSOM_Min$Dataset_ID<-as.factor(SMDSOM_Min$Dataset_ID)
+SMDSOC_Org$Dataset_ID<-as.factor(SMDSOC_Org$Dataset_ID)
+SMDSOC_Min$Dataset_ID<-as.factor(SMDSOC_Min$Dataset_ID)
+SMDSON_Org$Dataset_ID<-as.factor(SMDSON_Org$Dataset_ID)
+SMDSON_Min$Dataset_ID<-as.factor(SMDSON_Min$Dataset_ID)
+SMDCN_Org$Dataset_ID<-as.factor(SMDCN_Org$Dataset_ID)
+SMDCN_Min$Dataset_ID<-as.factor(SMDCN_Min$Dataset_ID)
+SMDpH_Org$Dataset_ID<-as.factor(SMDpH_Org$Dataset_ID)
+# SMDpH_Min$Dataset_ID<-as.factor(SMDpH_Min$Dataset_ID)
+SMDBD_Org$Dataset_ID<-as.factor(SMDBD_Org$Dataset_ID)
+SMDBD_Min$Dataset_ID<-as.factor(SMDBD_Min$Dataset_ID)
+SMDOL_D_Plot$Dataset_ID<-as.factor(SMDOL_D_Plot$Dataset_ID)
+
+SMDGraminoids$Dataset_ID<-as.factor(SMDGraminoids$Dataset_ID)
+SMDForbs$Dataset_ID<-as.factor(SMDForbs$Dataset_ID)
+SMDDecid_Shrubs$Dataset_ID<-as.factor(SMDDecid_Shrubs$Dataset_ID)
+SMDEvergr_Shrubs$Dataset_ID<-as.factor(SMDEvergr_Shrubs$Dataset_ID)
+SMDMosses$Dataset_ID<-as.factor(SMDMosses$Dataset_ID)
+SMDLichens$Dataset_ID<-as.factor(SMDLichens$Dataset_ID)
+SMDBM$Dataset_ID<-as.factor(SMDBM$Dataset_ID)
+SMDMean_H$Dataset_ID<-as.factor(SMDMean_H$Dataset_ID)
+
+SMDBacterial_BM_Weight$Dataset_ID<-as.factor(SMDBacterial_BM_Weight$Dataset_ID)
+SMDFungal_BM_Weight$Dataset_ID<-as.factor(SMDFungal_BM_Weight$Dataset_ID)
+SMDFB_Ratio$Dataset_ID<-as.factor(SMDFB_Ratio$Dataset_ID)
+
+```
+
+```{r Merge climate, soil, vegetation, microbial drivers into 1 df: do merge}
+drivers<-read.csv("Dataset_ID.csv")
+
+drivers<-plyr::rename(drivers,c("ï..Dataset_ID"="Dataset_ID"))
+drivers$Dataset_ID<-as.factor(drivers$Dataset_ID)
+
+drivers<-full_join(drivers, dfSummary_AT[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="AirTemp_CTL"))
+drivers<-full_join(drivers, SMDAT[ , c("Dataset_ID", "Hedges_SMDAT")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDAT"="SMD_AT"))
+
+drivers<-full_join(drivers, dfSummary_ST[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="SoilTemp_CTL"))
+drivers<-full_join(drivers, SMDST[ , c("Dataset_ID", "Hedges_SMDST")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDST"="SMD_ST"))
+
+drivers<-full_join(drivers, dfSummary_SM[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="SoilMoist_CTL"))
+drivers<-full_join(drivers, SMDSM[ , c("Dataset_ID", "Hedges_SMDSM")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDSM"="SMD_SM"))
+
+
+
+
+
+drivers<-full_join(drivers, dfSummarySOM_Org[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="SOM_Org_CTL"))
+drivers<-full_join(drivers, SMDSOM_Org[ , c("Dataset_ID", "Hedges_SMDSOM_Org")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDSOM_Org"="SMD_SOM_Org"))
+# 
+# drivers<-full_join(drivers, dfSummarySOM_Min[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+# drivers<-plyr::rename(drivers,c("MEAN_CTL"="SOM_Min_CTL"))
+# drivers<-full_join(drivers, SMDSOM_Min[ , c("Dataset_ID", "Hedges_SMDSOM_Min")], by=c("Dataset_ID"))
+# drivers<-plyr::rename(drivers,c("Hedges_SMDSOM_Min"="SMD_SOM_Min"))
+
+
+drivers<-full_join(drivers, dfSummarySOC_Org[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="SOC_Org_CTL"))
+drivers<-full_join(drivers, SMDSOC_Org[ , c("Dataset_ID", "Hedges_SMDSOC_Org")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDSOC_Org"="SMD_SOC_Org"))
+
+drivers<-full_join(drivers, dfSummarySOC_Min[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="SOC_Min_CTL"))
+drivers<-full_join(drivers, SMDSOC_Min[ , c("Dataset_ID", "Hedges_SMDSOC_Min")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDSOC_Min"="SMD_SOC_Min"))
+
+
+drivers<-full_join(drivers, dfSummarySON_Org[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="SON_Org_CTL"))
+drivers<-full_join(drivers, SMDSON_Org[ , c("Dataset_ID", "Hedges_SMDSON_Org")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDSON_Org"="SMD_SON_Org"))
+
+drivers<-full_join(drivers, dfSummarySON_Min[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="SON_Min_CTL"))
+drivers<-full_join(drivers, SMDSON_Min[ , c("Dataset_ID", "Hedges_SMDSON_Min")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDSON_Min"="SMD_SON_Min"))
+
+
+
+
+drivers<-full_join(drivers, dfSummaryCN_Org[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="CN_Org_CTL"))
+drivers<-full_join(drivers, SMDCN_Org[ , c("Dataset_ID", "Hedges_SMDCN_Org")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDCN_Org"="SMD_CN_Org"))
+
+drivers<-full_join(drivers, dfSummaryCN_Min[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="CN_Min_CTL"))
+drivers<-full_join(drivers, SMDCN_Min[ , c("Dataset_ID", "Hedges_SMDCN_Min")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDCN_Min"="SMD_CN_Min"))
+
+drivers<-full_join(drivers, dfSummarypH_Org[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="pH_Org_CTL"))
+drivers<-full_join(drivers, SMDpH_Org[ , c("Dataset_ID", "Hedges_SMDpH_Org")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDpH_Org"="SMD_pH_Org"))
+# 
+# drivers<-full_join(drivers, dfSummarypH_Min[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+# drivers<-plyr::rename(drivers,c("MEAN_CTL"="pH_Min_CTL"))
+# drivers<-full_join(drivers, SMDpH_Min[ , c("Dataset_ID", "Hedges_SMDpH_Min")], by=c("Dataset_ID"))
+# drivers<-plyr::rename(drivers,c("Hedges_SMDpH_Min"="SMD_pH_Min"))
+
+drivers<-full_join(drivers, dfSummaryBD_Org[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="BD_Org_CTL"))
+drivers<-full_join(drivers, SMDBD_Org[ , c("Dataset_ID", "Hedges_SMDBD_Org")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDBD_Org"="SMD_BD_Org"))
+
+drivers<-full_join(drivers, dfSummaryBD_Min[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="BD_Min_CTL"))
+drivers<-full_join(drivers, SMDBD_Min[ , c("Dataset_ID", "Hedges_SMDBD_Min")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDBD_Min"="SMD_BD_Min"))
+
+
+
+drivers<-full_join(drivers, dfSummaryOL_D_Plot[ , c("Dataset_ID", "MEAN_CTL")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("MEAN_CTL"="OL_D_Plot_CTL"))
+drivers<-full_join(drivers, SMDOL_D_Plot[ , c("Dataset_ID", "Hedges_SMDOL_D_Plot")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDOL_D_Plot"="SMD_OL_D_Plot"))
+
+
+
+
+
+
+
+
+
+
+drivers<-full_join(drivers, SMDGraminoids[ , c("Dataset_ID", "Hedges_SMDGraminoids")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDGraminoids"="SMD_Graminoids"))
+
+drivers<-full_join(drivers, SMDForbs[ , c("Dataset_ID", "Hedges_SMDForbs")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDForbs"="SMD_Forbs"))
+
+drivers<-full_join(drivers, SMDDecid_Shrubs[ , c("Dataset_ID", "Hedges_SMDDecid_Shrubs")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDDecid_Shrubs"="SMD_Decid_Shrubs"))
+
+drivers<-full_join(drivers, SMDEvergr_Shrubs[ , c("Dataset_ID", "Hedges_SMDEvergr_Shrubs")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDEvergr_Shrubs"="SMD_Evergr_Shrubs"))
+
+drivers<-full_join(drivers, SMDMosses[ , c("Dataset_ID", "Hedges_SMDMosses")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDMosses"="SMD_Mosses"))
+
+drivers<-full_join(drivers, SMDLichens[ , c("Dataset_ID", "Hedges_SMDLichens")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDLichens"="SMD_Lichens"))
+
+drivers<-full_join(drivers, SMDBM[ , c("Dataset_ID", "Hedges_SMDBM")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDBM"="SMD_BM"))
+
+drivers<-full_join(drivers, SMDMean_H[ , c("Dataset_ID", "Hedges_SMDMean_H")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDMean_H"="SMD_Mean_H"))
+
+
+
+drivers<-full_join(drivers, SMDBacterial_BM_Weight[ , c("Dataset_ID", "Hedges_SMDBacterial_BM_Weight")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDBacterial_BM_Weight"="SMD_Bacterial_BM_Weight"))
+
+drivers<-full_join(drivers, SMDFungal_BM_Weight[ , c("Dataset_ID", "Hedges_SMDFungal_BM_Weight")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDFungal_BM_Weight"="SMD_Fungal_BM_Weight"))
+
+drivers<-full_join(drivers, SMDFB_Ratio[ , c("Dataset_ID", "Hedges_SMDFB_Ratio")], by=c("Dataset_ID"))
+drivers<-plyr::rename(drivers,c("Hedges_SMDFB_Ratio"="SMD_FB_Ratio"))
+
+
+names(drivers)
+col_order <- c("Dataset_ID", "AirTemp_CTL", "SoilTemp_CTL", "SoilMoist_CTL","SOM_Org_CTL",	"SOC_Org_CTL",	"SOC_Min_CTL",	"SON_Org_CTL",	"SON_Min_CTL",	"CN_Org_CTL",	"CN_Min_CTL",	"pH_Org_CTL","BD_Org_CTL","BD_Min_CTL",	"OL_D_Plot_CTL",	"SMD_AT",	"SMD_ST",	"SMD_SM",	"SMD_SOM_Org",	"SMD_SOC_Org",	"SMD_SOC_Min",	"SMD_SON_Org", 	"SMD_SON_Min",		"SMD_CN_Org",	"SMD_CN_Min",	"SMD_pH_Org",			"SMD_BD_Org",	"SMD_BD_Min",	"SMD_OL_D_Plot",		"SMD_Graminoids",	"SMD_Forbs",	"SMD_Decid_Shrubs",	"SMD_Evergr_Shrubs",	"SMD_Mosses",	"SMD_Lichens",	"SMD_BM",	"SMD_Mean_H",	"SMD_Bacterial_BM_Weight",	"SMD_Fungal_BM_Weight",	"SMD_FB_Ratio")
+
+drivers <- drivers[, col_order]
+# 
+# names(drivers)
+# (col_order)
+
+
+#doublechecking values: final edits
+# remove SMD_BD_Org en Min for SVA_6_2003, 2004, 2005, 2007 (see doublechecks file) for analysis
+drivers$SMD_BD_Org[which(drivers$Dataset_ID =="SVA_6_ER_2003")]<-NA
+drivers$SMD_BD_Org[which(drivers$Dataset_ID =="SVA_6_ER_2004")]<-NA
+drivers$SMD_BD_Org[which(drivers$Dataset_ID =="SVA_6_ER_2005")]<-NA
+drivers$SMD_BD_Org[which(drivers$Dataset_ID =="SVA_6_ER_2007")]<-NA
+
+drivers$SMD_BD_Min[which(drivers$Dataset_ID =="SVA_6_ER_2003")]<-NA
+drivers$SMD_BD_Min[which(drivers$Dataset_ID =="SVA_6_ER_2004")]<-NA
+drivers$SMD_BD_Min[which(drivers$Dataset_ID =="SVA_6_ER_2005")]<-NA
+drivers$SMD_BD_Min[which(drivers$Dataset_ID =="SVA_6_ER_2007")]<-NA
+
+SMDBD_Org$Hedges_SMDBD_Org[which(SMDBD_Org$Dataset_ID =="SVA_6_ER_2003")]<-NA
+SMDBD_Org$Hedges_SMDBD_Org[which(SMDBD_Org$Dataset_ID =="SVA_6_ER_2004")]<-NA
+SMDBD_Org$Hedges_SMDBD_Org[which(SMDBD_Org$Dataset_ID =="SVA_6_ER_2005")]<-NA
+SMDBD_Org$Hedges_SMDBD_Org[which(SMDBD_Org$Dataset_ID =="SVA_6_ER_2007")]<-NA
+
+SMDBD_Min$Hedges_SMDBD_Min[which(SMDBD_Min$Dataset_ID =="SVA_6_ER_2003")]<-NA
+SMDBD_Min$Hedges_SMDBD_Min[which(SMDBD_Min$Dataset_ID =="SVA_6_ER_2004")]<-NA
+SMDBD_Min$Hedges_SMDBD_Min[which(SMDBD_Min$Dataset_ID =="SVA_6_ER_2005")]<-NA
+SMDBD_Min$Hedges_SMDBD_Min[which(SMDBD_Min$Dataset_ID =="SVA_6_ER_2007")]<-NA
+
+write.csv(SMDBD_Min, "SMDBD_Min.csv")
+write.csv(SMDBD_Org, "SMDBD_Org.csv")
+
+
+
+
+
+
+write.csv(drivers, "drivers.csv")
+
+```
+
+
+#RMD (raw mean diff)
+##climate
+```{r climate, warnings=FALSE, echo=FALSE, message=FALSE}
+############### AIR TEMP (AT) ###############
+
+DS_final_AT<-DS_final[-which(is.na(DS_final$Air_Temp)),]
+
+dfSummary_AT<-DS_final_AT %>% group_by(Dataset_ID, Treatment) %>% summarize(MEAN=mean(Air_Temp), SDEV=sd(Air_Temp), SS=n())
+
+dfSummary_ATCTL <- dfSummary_AT  %>% dplyr::filter(Treatment=="CTL")
+dfSummary_ATOTC <- dfSummary_AT  %>% dplyr::filter(Treatment=="OTC")
+dfSummary_AT <- full_join(dfSummary_ATCTL, dfSummary_ATOTC, by="Dataset_ID")
+
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("MEAN.x"="MEAN_CTL"))
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("MEAN.y"="MEAN_OTC"))
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("SDEV.x"="SDEV_CTL"))
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("SDEV.y"="SDEV_OTC"))
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("SS.x"="SS_CTL"))
+dfSummary_AT<-plyr::rename(dfSummary_AT,c("SS.y"="SS_OTC"))
+
+# Calculate actual effect sizes per dataset (Raw RMD)
+RMDAT <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummary_AT 
+  )
+
+RMDAT<-plyr::rename(RMDAT,c("yi"="RMDAT"))
+RMDAT<-plyr::rename(RMDAT,c("vi"="RMDAT_VARIANCE"))
+
+Mean_RMDAT<-mean(RMDAT$RMDAT)
+Mean_RMDAT
+
+#Add confidence intervals
+RMDAT$CI_lb<-RMDAT$RMDAT-1.96*sqrt(RMDAT$RMDAT_VARIANCE)
+RMDAT$CI_ub<-RMDAT$RMDAT+1.96*sqrt(RMDAT$RMDAT_VARIANCE)
+
+
+
+############### SOIL TEMP (ST) ###############
+
+DS_final_ST<-DS_final[-which(is.na(DS_final$Soil_Temp)),]
+
+dfSummary_ST<-DS_final_ST %>% group_by(Dataset_ID, Treatment) %>% summarize(MEAN=mean(Soil_Temp), SDEV=sd(Soil_Temp), SS=n())
+
+dfSummary_STCTL <- dfSummary_ST  %>% dplyr::filter(Treatment=="CTL")
+dfSummary_STOTC <- dfSummary_ST  %>% dplyr::filter(Treatment=="OTC")
+dfSummary_ST <- full_join(dfSummary_STCTL, dfSummary_STOTC, by="Dataset_ID")
+
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("MEAN.x"="MEAN_CTL"))
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("MEAN.y"="MEAN_OTC"))
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("SDEV.x"="SDEV_CTL"))
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("SDEV.y"="SDEV_OTC"))
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("SS.x"="SS_CTL"))
+dfSummary_ST<-plyr::rename(dfSummary_ST,c("SS.y"="SS_OTC"))
+
+RMDST <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummary_ST 
+  )
+
+RMDST<-plyr::rename(RMDST,c("yi"="RMDST"))
+RMDST<-plyr::rename(RMDST,c("vi"="RMDST_VARIANCE"))
+
+Mean_RMDST<-mean(RMDST$RMDST)
+Mean_RMDST
+
+RMDST$CI_lb<-RMDST$RMDST-1.96*sqrt(RMDST$RMDST_VARIANCE)
+RMDST$CI_ub<-RMDST$RMDST+1.96*sqrt(RMDST$RMDST_VARIANCE)
+
+
+
+
+############### SOIL MOIST (SM) ###############
+
+DS_final_SM<-DS_final[-which(is.na(DS_final$SM)),]
+
+dfSummary_SM<-DS_final_SM %>% group_by(Dataset_ID, Treatment) %>% summarize(MEAN=mean(SM), SDEV=sd(SM), SS=n())
+
+dfSummary_SMCTL <- dfSummary_SM  %>% dplyr::filter(Treatment=="CTL")
+dfSummary_SMOTC <- dfSummary_SM  %>% dplyr::filter(Treatment=="OTC")
+dfSummary_SM <- full_join(dfSummary_SMCTL, dfSummary_SMOTC, by="Dataset_ID")
+
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("MEAN.x"="MEAN_CTL"))
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("MEAN.y"="MEAN_OTC"))
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("SDEV.x"="SDEV_CTL"))
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("SDEV.y"="SDEV_OTC"))
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("SS.x"="SS_CTL"))
+dfSummary_SM<-plyr::rename(dfSummary_SM,c("SS.y"="SS_OTC"))
+
+RMDSM <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummary_SM 
+  )
+
+RMDSM<-plyr::rename(RMDSM,c("yi"="RMDSM"))
+RMDSM<-plyr::rename(RMDSM,c("vi"="RMDSM_VARIANCE"))
+
+Mean_RMDSM<-mean(RMDSM$RMDSM)
+Mean_RMDSM
+
+RMDSM$CI_lb<-RMDSM$RMDSM-1.96*sqrt(RMDSM$RMDSM_VARIANCE)
+RMDSM$CI_ub<-RMDSM$RMDSM+1.96*sqrt(RMDSM$RMDSM_VARIANCE)
+
+# 
+# write.csv(dfSummary_AT, "dfSummaryAT.csv")
+# write.csv(dfSummary_ST, "dfSummaryST.csv")
+# write.csv(dfSummary_SM, "dfSummarySM.csv")
+
+write.csv(RMDAT, "RMDAT.csv")
+write.csv(RMDST, "RMDST.csv")
+write.csv(RMDSM, "RMDSM.csv")
+
+
+
+```
+
+
+##soil
+```{r soil, warnings=FALSE, echo=FALSE, message=FALSE}
+
+############### SOM_Org ###############
+
+df_PLOT_LEVEL_SOM_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SOM_Org)),]
+
+dfSummarySOM_Org<-df_PLOT_LEVEL_SOM_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SOM_Org), SDEV=sd(SOM_Org), SS=n())
+
+dfSummarySOM_OrgCTL <- dfSummarySOM_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummarySOM_OrgOTC <- dfSummarySOM_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummarySOM_Org <- full_join(dfSummarySOM_OrgCTL, dfSummarySOM_OrgOTC, by="Dataset_ID")
+
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("SS.x"="SS_CTL"))
+dfSummarySOM_Org<-plyr::rename(dfSummarySOM_Org,c("SS.y"="SS_OTC"))
+
+RMDSOM_Org <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarySOM_Org 
+  )
+
+RMDSOM_Org<-plyr::rename(RMDSOM_Org,c("yi"="RMDSOM_Org"))
+RMDSOM_Org<-plyr::rename(RMDSOM_Org,c("vi"="RMDSOM_Org_VARIANCE"))
+
+CheckNA<-which(is.na(RMDSOM_Org$RMDSOM_Org))
+if(length(CheckNA)>0) {
+RMDSOM_Org<-RMDSOM_Org[-which(is.na(RMDSOM_Org$RMDSOM_Org)),]}
+
+
+Mean_RMDSOM_Org<-mean(RMDSOM_Org$RMDSOM_Org)
+Mean_RMDSOM_Org
+
+RMDSOM_Org$CI_lb<-RMDSOM_Org$RMDSOM_Org-1.96*sqrt(RMDSOM_Org$RMDSOM_Org_VARIANCE)
+RMDSOM_Org$CI_ub<-RMDSOM_Org$RMDSOM_Org+1.96*sqrt(RMDSOM_Org$RMDSOM_Org_VARIANCE)
+
+# 
+# 
+# ############### SOM_Min ###############
+# 
+# df_PLOT_LEVEL_SOM_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SOM_Min)),]
+# 
+# dfSummarySOM_Min<-df_PLOT_LEVEL_SOM_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SOM_Min), SDEV=sd(SOM_Min), SS=n())
+# 
+# dfSummarySOM_MinCTL <- dfSummarySOM_Min  %>% dplyr::filter(Treatment=="CTL")
+# dfSummarySOM_MinOTC <- dfSummarySOM_Min  %>% dplyr::filter(Treatment=="OTC")
+# dfSummarySOM_Min <- full_join(dfSummarySOM_MinCTL, dfSummarySOM_MinOTC, by="Dataset_ID")
+# 
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("MEAN.x"="MEAN_CTL"))
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("MEAN.y"="MEAN_OTC"))
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("SDEV.x"="SDEV_CTL"))
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("SDEV.y"="SDEV_OTC"))
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("SS.x"="SS_CTL"))
+# dfSummarySOM_Min<-plyr::rename(dfSummarySOM_Min,c("SS.y"="SS_OTC"))
+# 
+# RMDSOM_Min <-
+#   escalc("MD", m1i = MEAN_OTC,
+#     n1i = SS_OTC,
+#     sd1i = SDEV_OTC,
+#     m2i = MEAN_CTL,
+#     n2i = SS_CTL,
+#     sd2i = SDEV_CTL,
+#     data = dfSummarySOM_Min 
+#   )
+# 
+# RMDSOM_Min<-plyr::rename(RMDSOM_Min,c("yi"="RMDSOM_Min"))
+# RMDSOM_Min<-plyr::rename(RMDSOM_Min,c("vi"="RMDSOM_Min_VARIANCE"))
+# 
+# CheckNA<-which(is.na(RMDSOM_Min$RMDSOM_Min))
+# if(length(CheckNA)>0) {
+# RMDSOM_Min<-RMDSOM_Min[-which(is.na(RMDSOM_Min$RMDSOM_Min)),]}
+# 
+# 
+# Mean_RMDSOM_Min<-mean(RMDSOM_Min$RMDSOM_Min)
+# Mean_RMDSOM_Min
+# 
+# 
+# #Add confidence intervals
+# RMDSOM_Min$CI_lb<-RMDSOM_Min$RMDSOM_Min-1.96*sqrt(RMDSOM_Min$RMDSOM_Min_VARIANCE)
+# RMDSOM_Min$CI_ub<-RMDSOM_Min$RMDSOM_Min+1.96*sqrt(RMDSOM_Min$RMDSOM_Min_VARIANCE)
+
+
+
+
+
+
+
+############### SOC_Org ###############
+
+df_PLOT_LEVEL_SOC_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SOC_Org)),]
+
+dfSummarySOC_Org<-df_PLOT_LEVEL_SOC_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SOC_Org), SDEV=sd(SOC_Org), SS=n())
+
+dfSummarySOC_OrgCTL <- dfSummarySOC_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummarySOC_OrgOTC <- dfSummarySOC_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummarySOC_Org <- full_join(dfSummarySOC_OrgCTL, dfSummarySOC_OrgOTC, by="Dataset_ID")
+
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("SS.x"="SS_CTL"))
+dfSummarySOC_Org<-plyr::rename(dfSummarySOC_Org,c("SS.y"="SS_OTC"))
+
+RMDSOC_Org <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarySOC_Org 
+  )
+
+RMDSOC_Org<-plyr::rename(RMDSOC_Org,c("yi"="RMDSOC_Org"))
+RMDSOC_Org<-plyr::rename(RMDSOC_Org,c("vi"="RMDSOC_Org_VARIANCE"))
+
+CheckNA<-which(is.na(RMDSOC_Org$RMDSOC_Org))
+rowtoremove<-as.numeric(CheckNA)
+if(length(CheckNA)>0) {
+ RMDSOC_Org <- RMDSOC_Org[-rowtoremove,]}
+
+Mean_RMDSOC_Org<-mean(RMDSOC_Org$RMDSOC_Org)
+Mean_RMDSOC_Org
+
+
+RMDSOC_Org$CI_lb<-RMDSOC_Org$RMDSOC_Org-1.96*sqrt(RMDSOC_Org$RMDSOC_Org_VARIANCE)
+RMDSOC_Org$CI_ub<-RMDSOC_Org$RMDSOC_Org+1.96*sqrt(RMDSOC_Org$RMDSOC_Org_VARIANCE)
+
+
+
+
+############### SOC_Min ###############
+
+df_PLOT_LEVEL_SOC_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SOC_Min)),]
+
+dfSummarySOC_Min<-df_PLOT_LEVEL_SOC_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SOC_Min), SDEV=sd(SOC_Min), SS=n())
+
+dfSummarySOC_MinCTL <- dfSummarySOC_Min  %>% dplyr::filter(Treatment=="CTL")
+dfSummarySOC_MinOTC <- dfSummarySOC_Min  %>% dplyr::filter(Treatment=="OTC")
+dfSummarySOC_Min <- full_join(dfSummarySOC_MinCTL, dfSummarySOC_MinOTC, by="Dataset_ID")
+
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("MEAN.x"="MEAN_CTL"))
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("MEAN.y"="MEAN_OTC"))
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("SDEV.x"="SDEV_CTL"))
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("SDEV.y"="SDEV_OTC"))
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("SS.x"="SS_CTL"))
+dfSummarySOC_Min<-plyr::rename(dfSummarySOC_Min,c("SS.y"="SS_OTC"))
+
+RMDSOC_Min <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarySOC_Min 
+  )
+
+RMDSOC_Min<-plyr::rename(RMDSOC_Min,c("yi"="RMDSOC_Min"))
+RMDSOC_Min<-plyr::rename(RMDSOC_Min,c("vi"="RMDSOC_Min_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDSOC_Min$RMDSOC_Min))
+rowtoremove<-as.numeric(CheckNA)
+if(length(CheckNA)>0) {
+ RMDSOC_Min <- RMDSOC_Min[-rowtoremove,]}
+
+Mean_RMDSOC_Min<-mean(RMDSOC_Min$RMDSOC_Min)
+Mean_RMDSOC_Min
+
+
+RMDSOC_Min$CI_lb<-RMDSOC_Min$RMDSOC_Min-1.96*sqrt(RMDSOC_Min$RMDSOC_Min_VARIANCE)
+RMDSOC_Min$CI_ub<-RMDSOC_Min$RMDSOC_Min+1.96*sqrt(RMDSOC_Min$RMDSOC_Min_VARIANCE)
+
+
+
+
+
+
+############### SON_Org ###############
+
+df_PLOT_LEVEL_SON_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SON_Org)),]
+
+dfSummarySON_Org<-df_PLOT_LEVEL_SON_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SON_Org), SDEV=sd(SON_Org), SS=n())
+
+dfSummarySON_OrgCTL <- dfSummarySON_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummarySON_OrgOTC <- dfSummarySON_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummarySON_Org <- full_join(dfSummarySON_OrgCTL, dfSummarySON_OrgOTC, by="Dataset_ID")
+
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("SS.x"="SS_CTL"))
+dfSummarySON_Org<-plyr::rename(dfSummarySON_Org,c("SS.y"="SS_OTC"))
+
+RMDSON_Org <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarySON_Org 
+  )
+
+RMDSON_Org<-plyr::rename(RMDSON_Org,c("yi"="RMDSON_Org"))
+RMDSON_Org<-plyr::rename(RMDSON_Org,c("vi"="RMDSON_Org_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDSON_Org$RMDSON_Org))
+rowtoremove<-as.numeric(CheckNA)
+if(length(CheckNA)>0) {
+ RMDSON_Org <- RMDSON_Org[-rowtoremove,]}
+
+Mean_RMDSON_Org<-mean(RMDSON_Org$RMDSON_Org)
+Mean_RMDSON_Org
+
+
+RMDSON_Org$CI_lb<-RMDSON_Org$RMDSON_Org-1.96*sqrt(RMDSON_Org$RMDSON_Org_VARIANCE)
+RMDSON_Org$CI_ub<-RMDSON_Org$RMDSON_Org+1.96*sqrt(RMDSON_Org$RMDSON_Org_VARIANCE)
+
+
+
+
+############### SON_Min ###############
+
+df_PLOT_LEVEL_SON_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$SON_Min)),]
+
+dfSummarySON_Min<-df_PLOT_LEVEL_SON_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(SON_Min), SDEV=sd(SON_Min), SS=n())
+
+dfSummarySON_MinCTL <- dfSummarySON_Min  %>% dplyr::filter(Treatment=="CTL")
+dfSummarySON_MinOTC <- dfSummarySON_Min  %>% dplyr::filter(Treatment=="OTC")
+dfSummarySON_Min <- full_join(dfSummarySON_MinCTL, dfSummarySON_MinOTC, by="Dataset_ID")
+
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("MEAN.x"="MEAN_CTL"))
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("MEAN.y"="MEAN_OTC"))
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("SDEV.x"="SDEV_CTL"))
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("SDEV.y"="SDEV_OTC"))
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("SS.x"="SS_CTL"))
+dfSummarySON_Min<-plyr::rename(dfSummarySON_Min,c("SS.y"="SS_OTC"))
+
+RMDSON_Min <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarySON_Min 
+  )
+
+RMDSON_Min<-plyr::rename(RMDSON_Min,c("yi"="RMDSON_Min"))
+RMDSON_Min<-plyr::rename(RMDSON_Min,c("vi"="RMDSON_Min_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDSON_Min$RMDSON_Min))
+rowtoremove<-as.numeric(CheckNA)
+if(length(CheckNA)>0) {
+ RMDSON_Min <- RMDSON_Min[-rowtoremove,]}
+
+Mean_RMDSON_Min<-mean(RMDSON_Min$RMDSON_Min)
+Mean_RMDSON_Min
+
+
+RMDSON_Min$CI_lb<-RMDSON_Min$RMDSON_Min-1.96*sqrt(RMDSON_Min$RMDSON_Min_VARIANCE)
+RMDSON_Min$CI_ub<-RMDSON_Min$RMDSON_Min+1.96*sqrt(RMDSON_Min$RMDSON_Min_VARIANCE)
+
+
+
+############### CN_Org ###############
+
+df_PLOT_LEVEL_CN_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$CN_Org)),]
+
+dfSummaryCN_Org<-df_PLOT_LEVEL_CN_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(CN_Org), SDEV=sd(CN_Org), SS=n())
+
+dfSummaryCN_OrgCTL <- dfSummaryCN_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryCN_OrgOTC <- dfSummaryCN_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryCN_Org <- full_join(dfSummaryCN_OrgCTL, dfSummaryCN_OrgOTC, by="Dataset_ID")
+
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("SS.x"="SS_CTL"))
+dfSummaryCN_Org<-plyr::rename(dfSummaryCN_Org,c("SS.y"="SS_OTC"))
+
+RMDCN_Org <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryCN_Org 
+  )
+
+RMDCN_Org<-plyr::rename(RMDCN_Org,c("yi"="RMDCN_Org"))
+RMDCN_Org<-plyr::rename(RMDCN_Org,c("vi"="RMDCN_Org_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDCN_Org$RMDCN_Org))
+rowtoremove<-as.numeric(CheckNA)
+if(length(CheckNA)>0) {
+ RMDCN_Org <- RMDCN_Org[-rowtoremove,]}
+
+Mean_RMDCN_Org<-mean(RMDCN_Org$RMDCN_Org)
+Mean_RMDCN_Org
+
+RMDCN_Org$CI_lb<-RMDCN_Org$RMDCN_Org-1.96*sqrt(RMDCN_Org$RMDCN_Org_VARIANCE)
+RMDCN_Org$CI_ub<-RMDCN_Org$RMDCN_Org+1.96*sqrt(RMDCN_Org$RMDCN_Org_VARIANCE)
+
+
+
+############### CN_Min ###############
+
+df_PLOT_LEVEL_CN_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$CN_Min)),]
+
+dfSummaryCN_Min<-df_PLOT_LEVEL_CN_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(CN_Min), SDEV=sd(CN_Min), SS=n())
+
+dfSummaryCN_MinCTL <- dfSummaryCN_Min  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryCN_MinOTC <- dfSummaryCN_Min  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryCN_Min <- full_join(dfSummaryCN_MinCTL, dfSummaryCN_MinOTC, by="Dataset_ID")
+
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("MEAN.x"="MEAN_CTL"))
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("MEAN.y"="MEAN_OTC"))
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("SDEV.x"="SDEV_CTL"))
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("SDEV.y"="SDEV_OTC"))
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("SS.x"="SS_CTL"))
+dfSummaryCN_Min<-plyr::rename(dfSummaryCN_Min,c("SS.y"="SS_OTC"))
+
+RMDCN_Min <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryCN_Min 
+  )
+
+RMDCN_Min<-plyr::rename(RMDCN_Min,c("yi"="RMDCN_Min"))
+RMDCN_Min<-plyr::rename(RMDCN_Min,c("vi"="RMDCN_Min_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDCN_Min$RMDCN_Min))
+rowtoremove<-as.numeric(CheckNA)
+if(length(CheckNA)>0) {
+ RMDCN_Min <- RMDCN_Min[-rowtoremove,]}
+
+Mean_RMDCN_Min<-mean(RMDCN_Min$RMDCN_Min)
+Mean_RMDCN_Min
+
+
+RMDCN_Min$CI_lb<-RMDCN_Min$RMDCN_Min-1.96*sqrt(RMDCN_Min$RMDCN_Min_VARIANCE)
+RMDCN_Min$CI_ub<-RMDCN_Min$RMDCN_Min+1.96*sqrt(RMDCN_Min$RMDCN_Min_VARIANCE)
+
+
+
+
+
+
+
+############### pH_Org ###############
+
+df_PLOT_LEVEL_pH_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$pH_Org)),]
+
+dfSummarypH_Org<-df_PLOT_LEVEL_pH_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(pH_Org), SDEV=sd(pH_Org), SS=n())
+
+dfSummarypH_OrgCTL <- dfSummarypH_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummarypH_OrgOTC <- dfSummarypH_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummarypH_Org <- full_join(dfSummarypH_OrgCTL, dfSummarypH_OrgOTC, by="Dataset_ID")
+
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("SS.x"="SS_CTL"))
+dfSummarypH_Org<-plyr::rename(dfSummarypH_Org,c("SS.y"="SS_OTC"))
+
+RMDpH_Org <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummarypH_Org 
+  )
+
+RMDpH_Org<-plyr::rename(RMDpH_Org,c("yi"="RMDpH_Org"))
+RMDpH_Org<-plyr::rename(RMDpH_Org,c("vi"="RMDpH_Org_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDpH_Org$RMDpH_Org))
+rowtoremove<-as.numeric(CheckNA)
+if(length(CheckNA)>0) {
+ RMDpH_Org <- RMDpH_Org[-rowtoremove,]}
+
+Mean_RMDpH_Org<-mean(RMDpH_Org$RMDpH_Org)
+Mean_RMDpH_Org
+
+
+#Add confidence intervals
+RMDpH_Org$CI_lb<-RMDpH_Org$RMDpH_Org-1.96*sqrt(RMDpH_Org$RMDpH_Org_VARIANCE)
+RMDpH_Org$CI_ub<-RMDpH_Org$RMDpH_Org+1.96*sqrt(RMDpH_Org$RMDpH_Org_VARIANCE)
+
+
+# 
+# 
+# ############### pH_Min ###############
+# 
+# df_PLOT_LEVEL_pH_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$pH_Min)),]
+# 
+# dfSummarypH_Min<-df_PLOT_LEVEL_pH_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(pH_Min), SDEV=sd(pH_Min), SS=n())
+# 
+# dfSummarypH_MinCTL <- dfSummarypH_Min  %>% dplyr::filter(Treatment=="CTL")
+# dfSummarypH_MinOTC <- dfSummarypH_Min  %>% dplyr::filter(Treatment=="OTC")
+# dfSummarypH_Min <- full_join(dfSummarypH_MinCTL, dfSummarypH_MinOTC, by="Dataset_ID")
+# 
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("MEAN.x"="MEAN_CTL"))
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("MEAN.y"="MEAN_OTC"))
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("SDEV.x"="SDEV_CTL"))
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("SDEV.y"="SDEV_OTC"))
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("SS.x"="SS_CTL"))
+# dfSummarypH_Min<-plyr::rename(dfSummarypH_Min,c("SS.y"="SS_OTC"))
+# 
+# RMDpH_Min <-
+#   escalc("MD", m1i = MEAN_OTC,
+#     n1i = SS_OTC,
+#     sd1i = SDEV_OTC,
+#     m2i = MEAN_CTL,
+#     n2i = SS_CTL,
+#     sd2i = SDEV_CTL,
+#     data = dfSummarypH_Min 
+#   )
+# 
+# RMDpH_Min<-plyr::rename(RMDpH_Min,c("yi"="RMDpH_Min"))
+# RMDpH_Min<-plyr::rename(RMDpH_Min,c("vi"="RMDpH_Min_VARIANCE"))
+# 
+# 
+# CheckNA<-which(is.na(RMDpH_Min$RMDpH_Min))
+# rowtoremove<-as.numeric(CheckNA)
+# if(length(CheckNA)>0) {
+#  RMDpH_Min <- RMDpH_Min[-rowtoremove,]}
+# 
+# Mean_RMDpH_Min<-mean(RMDpH_Min$RMDpH_Min)
+# Mean_RMDpH_Min
+# 
+# 
+# RMDpH_Min$CI_lb<-RMDpH_Min$RMDpH_Min-1.96*sqrt(RMDpH_Min$RMDpH_Min_VARIANCE)
+# RMDpH_Min$CI_ub<-RMDpH_Min$RMDpH_Min+1.96*sqrt(RMDpH_Min$RMDpH_Min_VARIANCE)
+# 
+# 
+
+
+
+
+
+############### BD_Org ###############
+
+df_PLOT_LEVEL_BD_Org<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$BD_Org)),]
+
+dfSummaryBD_Org<-df_PLOT_LEVEL_BD_Org %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(BD_Org), SDEV=sd(BD_Org), SS=n())
+
+dfSummaryBD_OrgCTL <- dfSummaryBD_Org  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryBD_OrgOTC <- dfSummaryBD_Org  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryBD_Org <- full_join(dfSummaryBD_OrgCTL, dfSummaryBD_OrgOTC, by="Dataset_ID")
+
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("MEAN.x"="MEAN_CTL"))
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("MEAN.y"="MEAN_OTC"))
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("SDEV.x"="SDEV_CTL"))
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("SDEV.y"="SDEV_OTC"))
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("SS.x"="SS_CTL"))
+dfSummaryBD_Org<-plyr::rename(dfSummaryBD_Org,c("SS.y"="SS_OTC"))
+
+RMDBD_Org <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryBD_Org 
+  )
+
+RMDBD_Org<-plyr::rename(RMDBD_Org,c("yi"="RMDBD_Org"))
+RMDBD_Org<-plyr::rename(RMDBD_Org,c("vi"="RMDBD_Org_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDBD_Org$RMDBD_Org))
+rowtoremove<-as.numeric(CheckNA)
+if(length(CheckNA)>0) {
+ RMDBD_Org <- RMDBD_Org[-rowtoremove,]}
+
+Mean_RMDBD_Org<-mean(RMDBD_Org$RMDBD_Org)
+Mean_RMDBD_Org
+
+
+RMDBD_Org$CI_lb<-RMDBD_Org$RMDBD_Org-1.96*sqrt(RMDBD_Org$RMDBD_Org_VARIANCE)
+RMDBD_Org$CI_ub<-RMDBD_Org$RMDBD_Org+1.96*sqrt(RMDBD_Org$RMDBD_Org_VARIANCE)
+
+
+
+
+############### BD_Min ###############
+
+df_PLOT_LEVEL_BD_Min<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$BD_Min)),]
+
+dfSummaryBD_Min<-df_PLOT_LEVEL_BD_Min %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(BD_Min), SDEV=sd(BD_Min), SS=n())
+
+dfSummaryBD_MinCTL <- dfSummaryBD_Min  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryBD_MinOTC <- dfSummaryBD_Min  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryBD_Min <- full_join(dfSummaryBD_MinCTL, dfSummaryBD_MinOTC, by="Dataset_ID")
+
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("MEAN.x"="MEAN_CTL"))
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("MEAN.y"="MEAN_OTC"))
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("SDEV.x"="SDEV_CTL"))
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("SDEV.y"="SDEV_OTC"))
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("SS.x"="SS_CTL"))
+dfSummaryBD_Min<-plyr::rename(dfSummaryBD_Min,c("SS.y"="SS_OTC"))
+
+RMDBD_Min <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryBD_Min 
+  )
+
+RMDBD_Min<-plyr::rename(RMDBD_Min,c("yi"="RMDBD_Min"))
+RMDBD_Min<-plyr::rename(RMDBD_Min,c("vi"="RMDBD_Min_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDBD_Min$RMDBD_Min))
+rowtoremove<-as.numeric(CheckNA)
+if(length(CheckNA)>0) {
+ RMDBD_Min <- RMDBD_Min[-rowtoremove,]}
+
+Mean_RMDBD_Min<-mean(RMDBD_Min$RMDBD_Min)
+Mean_RMDBD_Min
+
+
+RMDBD_Min$CI_lb<-RMDBD_Min$RMDBD_Min-1.96*sqrt(RMDBD_Min$RMDBD_Min_VARIANCE)
+RMDBD_Min$CI_ub<-RMDBD_Min$RMDBD_Min+1.96*sqrt(RMDBD_Min$RMDBD_Min_VARIANCE)
+
+
+
+
+# ############### OL_D_Plot ###############
+# 
+df_PLOT_LEVEL<-plyr::rename(df_PLOT_LEVEL,c("OL_D"="OL_D_Plot")) #rename to avoid confusion with site vs plot level
+
+df_PLOT_LEVEL_OL_D_Plot<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$OL_D_Plot)),]
+
+dfSummaryOL_D_Plot<-df_PLOT_LEVEL_OL_D_Plot %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(OL_D_Plot), SDEV=sd(OL_D_Plot), SS=n())
+
+dfSummaryOL_D_PlotCTL <- dfSummaryOL_D_Plot  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryOL_D_PlotOTC <- dfSummaryOL_D_Plot  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryOL_D_Plot <- full_join(dfSummaryOL_D_PlotCTL, dfSummaryOL_D_PlotOTC, by="Dataset_ID")
+
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("MEAN.x"="MEAN_CTL"))
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("MEAN.y"="MEAN_OTC"))
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("SDEV.x"="SDEV_CTL"))
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("SDEV.y"="SDEV_OTC"))
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("SS.x"="SS_CTL"))
+dfSummaryOL_D_Plot<-plyr::rename(dfSummaryOL_D_Plot,c("SS.y"="SS_OTC"))
+
+RMDOL_D_Plot <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryOL_D_Plot
+  )
+
+RMDOL_D_Plot<-plyr::rename(RMDOL_D_Plot,c("yi"="RMDOL_D_Plot"))
+RMDOL_D_Plot<-plyr::rename(RMDOL_D_Plot,c("vi"="RMDOL_D_Plot_VARIANCE"))
+
+# RMDOL_D_Plot<-RMDOL_D_Plot[-which(is.na(RMDOL_D_Plot$RMDOL_D_Plot)),]
+
+Mean_RMDOL_D_Plot<-mean(RMDOL_D_Plot$RMDOL_D_Plot)
+Mean_RMDOL_D_Plot
+
+
+RMDOL_D_Plot$CI_lb<-RMDOL_D_Plot$RMDOL_D_Plot-1.96*sqrt(RMDOL_D_Plot$RMDOL_D_Plot_VARIANCE)
+RMDOL_D_Plot$CI_ub<-RMDOL_D_Plot$RMDOL_D_Plot+1.96*sqrt(RMDOL_D_Plot$RMDOL_D_Plot_VARIANCE) 
+# 
+# # 
+# 
+# # https://stackoverflow.com/questions/38000128/set-separator-in-write-csv
+# write.csv(dfSummaryBD_Min, "dfSummaryBD_Min.csv")
+# write.csv(dfSummaryBD_Org, "dfSummaryBD_Org.csv")
+# write.csv(dfSummaryCN_Min, "dfSummaryCN_Min.csv")
+# write.csv(dfSummaryCN_Org, "dfSummaryCN_Org.csv")
+# write.csv(dfSummaryOL_D_Plot, "dfSummaryOL_D_Plot.csv")
+# write.csv(dfSummarypH_Min, "dfSummarypH_Min.csv")
+# write.csv(dfSummarypH_Min, "dfSummarypH_Min.csv")
+# write.csv(dfSummarypH_Org, "dfSummarypH_Org.csv")
+# write.csv(dfSummarySOC_Min, "dfSummarySOC_Min.csv")
+# write.csv(dfSummarySOC_Org, "dfSummarySOC_Org.csv")
+# write.csv(dfSummarySOM_Min, "dfSummarySOM_Min.csv")
+# write.csv(dfSummarySOM_Org, "dfSummarySOM_Org.csv")
+# write.csv(dfSummarySON_Min, "dfSummarySON_Min.csv")
+# write.csv(dfSummarySON_Org, "dfSummarySON_Org.csv")
+# # 
+write.csv(RMDBD_Min, "RMDBD_Min.csv")
+write.csv(RMDBD_Org, "RMDBD_Org.csv")
+write.csv(RMDCN_Min, "RMDCN_Min.csv")
+write.csv(RMDCN_Org, "RMDCN_Org.csv")
+write.csv(RMDOL_D_Plot, "RMDOL_D_Plot.csv")
+# write.csv(RMDpH_Min, "RMDpH_Min.csv")
+write.csv(RMDpH_Org, "RMDpH_Org.csv")
+write.csv(RMDSOC_Min, "RMDSOC_Min.csv")
+write.csv(RMDSOC_Org, "RMDSOC_Org.csv")
+# write.csv(RMDSOM_Min, "RMDSOM_Min.csv")
+write.csv(RMDSOM_Org, "RMDSOM_Org.csv")
+write.csv(RMDSON_Min, "RMDSON_Min.csv")
+write.csv(RMDSON_Org, "RMDSON_Org.csv")
+
+```
+
+
+##vegetation
+
+```{r vegetation, warnings=FALSE, echo=FALSE, message=FALSE}
+
+
+############### Graminoids ###############
+df_PLOT_LEVEL_Graminoids<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Graminoids)),]
+dfSummaryGraminoids<-df_PLOT_LEVEL_Graminoids %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Graminoids), SDEV=sd(Graminoids), SS=n())
+
+dfSummaryGraminoidsCTL <- dfSummaryGraminoids  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryGraminoidsOTC <- dfSummaryGraminoids  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryGraminoids <- full_join(dfSummaryGraminoidsCTL, dfSummaryGraminoidsOTC, by="Dataset_ID")
+
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("MEAN.x"="MEAN_CTL"))
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("MEAN.y"="MEAN_OTC"))
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("SDEV.x"="SDEV_CTL"))
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("SDEV.y"="SDEV_OTC"))
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("SS.x"="SS_CTL"))
+dfSummaryGraminoids<-plyr::rename(dfSummaryGraminoids,c("SS.y"="SS_OTC"))
+
+RMDGraminoids <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryGraminoids 
+  )
+
+RMDGraminoids<-plyr::rename(RMDGraminoids,c("yi"="RMDGraminoids"))
+RMDGraminoids<-plyr::rename(RMDGraminoids,c("vi"="RMDGraminoids_VARIANCE"))
+
+CheckNA<-which(is.na(RMDGraminoids$RMDGraminoids))
+if(length(CheckNA)>0) {
+RMDGraminoids<-RMDGraminoids[-which(is.na(RMDGraminoids$RMDGraminoids)),]}
+
+Mean_RMDGraminoids<-mean(RMDGraminoids$RMDGraminoids)
+Mean_RMDGraminoids
+
+RMDGraminoids$CI_lb<-RMDGraminoids$RMDGraminoids-1.96*sqrt(RMDGraminoids$RMDGraminoids_VARIANCE)
+RMDGraminoids$CI_ub<-RMDGraminoids$RMDGraminoids+1.96*sqrt(RMDGraminoids$RMDGraminoids_VARIANCE)
+
+
+
+############### Forbs ###############
+
+df_PLOT_LEVEL_Forbs<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Forbs)),]
+
+dfSummaryForbs<-df_PLOT_LEVEL_Forbs %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Forbs), SDEV=sd(Forbs), SS=n())
+
+dfSummaryForbsCTL <- dfSummaryForbs  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryForbsOTC <- dfSummaryForbs  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryForbs <- full_join(dfSummaryForbsCTL, dfSummaryForbsOTC, by="Dataset_ID")
+
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("MEAN.x"="MEAN_CTL"))
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("MEAN.y"="MEAN_OTC"))
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("SDEV.x"="SDEV_CTL"))
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("SDEV.y"="SDEV_OTC"))
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("SS.x"="SS_CTL"))
+dfSummaryForbs<-plyr::rename(dfSummaryForbs,c("SS.y"="SS_OTC"))
+
+RMDForbs <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryForbs 
+  )
+
+RMDForbs<-plyr::rename(RMDForbs,c("yi"="RMDForbs"))
+RMDForbs<-plyr::rename(RMDForbs,c("vi"="RMDForbs_VARIANCE"))
+
+CheckNA<-which(is.na(RMDForbs$RMDForbs))
+if(length(CheckNA)>0) {
+RMDForbs<-RMDForbs[-which(is.na(RMDForbs$RMDForbs)),]}
+
+
+Mean_RMDForbs<-mean(RMDForbs$RMDForbs)
+Mean_RMDForbs
+
+RMDForbs$CI_lb<-RMDForbs$RMDForbs-1.96*sqrt(RMDForbs$RMDForbs_VARIANCE)
+RMDForbs$CI_ub<-RMDForbs$RMDForbs+1.96*sqrt(RMDForbs$RMDForbs_VARIANCE)
+
+
+############### Decid_Shrubs ###############
+
+df_PLOT_LEVEL_Decid_Shrubs<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Decid_Shrubs)),]
+
+dfSummaryDecid_Shrubs<-df_PLOT_LEVEL_Decid_Shrubs %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Decid_Shrubs), SDEV=sd(Decid_Shrubs), SS=n())
+
+dfSummaryDecid_ShrubsCTL <- dfSummaryDecid_Shrubs  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryDecid_ShrubsOTC <- dfSummaryDecid_Shrubs  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryDecid_Shrubs <- full_join(dfSummaryDecid_ShrubsCTL, dfSummaryDecid_ShrubsOTC, by="Dataset_ID")
+
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("MEAN.x"="MEAN_CTL"))
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("MEAN.y"="MEAN_OTC"))
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("SDEV.x"="SDEV_CTL"))
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("SDEV.y"="SDEV_OTC"))
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("SS.x"="SS_CTL"))
+dfSummaryDecid_Shrubs<-plyr::rename(dfSummaryDecid_Shrubs,c("SS.y"="SS_OTC"))
+
+RMDDecid_Shrubs <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryDecid_Shrubs 
+  )
+
+RMDDecid_Shrubs<-plyr::rename(RMDDecid_Shrubs,c("yi"="RMDDecid_Shrubs"))
+RMDDecid_Shrubs<-plyr::rename(RMDDecid_Shrubs,c("vi"="RMDDecid_Shrubs_VARIANCE"))
+
+CheckNA<-which(is.na(RMDDecid_Shrubs$RMDDecid_Shrubs))
+if(length(CheckNA)>0) {
+RMDDecid_Shrubs<-RMDDecid_Shrubs[-which(is.na(RMDDecid_Shrubs$RMDDecid_Shrubs)),]}
+
+Mean_RMDDecid_Shrubs<-mean(RMDDecid_Shrubs$RMDDecid_Shrubs)
+Mean_RMDDecid_Shrubs
+
+RMDDecid_Shrubs$CI_lb<-RMDDecid_Shrubs$RMDDecid_Shrubs-1.96*sqrt(RMDDecid_Shrubs$RMDDecid_Shrubs_VARIANCE)
+RMDDecid_Shrubs$CI_ub<-RMDDecid_Shrubs$RMDDecid_Shrubs+1.96*sqrt(RMDDecid_Shrubs$RMDDecid_Shrubs_VARIANCE)
+
+
+
+############### Evergr_Shrubs ###############
+
+df_PLOT_LEVEL_Evergr_Shrubs<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Evergr_Shrubs)),]
+
+dfSummaryEvergr_Shrubs<-df_PLOT_LEVEL_Evergr_Shrubs %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Evergr_Shrubs), SDEV=sd(Evergr_Shrubs), SS=n())
+
+dfSummaryEvergr_ShrubsCTL <- dfSummaryEvergr_Shrubs  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryEvergr_ShrubsOTC <- dfSummaryEvergr_Shrubs  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryEvergr_Shrubs <- full_join(dfSummaryEvergr_ShrubsCTL, dfSummaryEvergr_ShrubsOTC, by="Dataset_ID")
+
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("MEAN.x"="MEAN_CTL"))
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("MEAN.y"="MEAN_OTC"))
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("SDEV.x"="SDEV_CTL"))
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("SDEV.y"="SDEV_OTC"))
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("SS.x"="SS_CTL"))
+dfSummaryEvergr_Shrubs<-plyr::rename(dfSummaryEvergr_Shrubs,c("SS.y"="SS_OTC"))
+
+RMDEvergr_Shrubs <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryEvergr_Shrubs 
+  )
+
+RMDEvergr_Shrubs<-plyr::rename(RMDEvergr_Shrubs,c("yi"="RMDEvergr_Shrubs"))
+RMDEvergr_Shrubs<-plyr::rename(RMDEvergr_Shrubs,c("vi"="RMDEvergr_Shrubs_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDEvergr_Shrubs$RMDEvergr_Shrubs))
+if(length(CheckNA)>0) {
+RMDEvergr_Shrubs<-RMDEvergr_Shrubs[-which(is.na(RMDEvergr_Shrubs$RMDEvergr_Shrubs)),]}
+
+Mean_RMDEvergr_Shrubs<-mean(RMDEvergr_Shrubs$RMDEvergr_Shrubs)
+Mean_RMDEvergr_Shrubs
+
+
+RMDEvergr_Shrubs$CI_lb<-RMDEvergr_Shrubs$RMDEvergr_Shrubs-1.96*sqrt(RMDEvergr_Shrubs$RMDEvergr_Shrubs_VARIANCE)
+RMDEvergr_Shrubs$CI_ub<-RMDEvergr_Shrubs$RMDEvergr_Shrubs+1.96*sqrt(RMDEvergr_Shrubs$RMDEvergr_Shrubs_VARIANCE)
+
+
+
+############### Mosses ###############
+
+df_PLOT_LEVEL_Mosses<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Mosses)),]
+
+dfSummaryMosses<-df_PLOT_LEVEL_Mosses %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Mosses), SDEV=sd(Mosses), SS=n())
+
+dfSummaryMossesCTL <- dfSummaryMosses  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryMossesOTC <- dfSummaryMosses  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryMosses <- full_join(dfSummaryMossesCTL, dfSummaryMossesOTC, by="Dataset_ID")
+
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("MEAN.x"="MEAN_CTL"))
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("MEAN.y"="MEAN_OTC"))
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("SDEV.x"="SDEV_CTL"))
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("SDEV.y"="SDEV_OTC"))
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("SS.x"="SS_CTL"))
+dfSummaryMosses<-plyr::rename(dfSummaryMosses,c("SS.y"="SS_OTC"))
+
+RMDMosses <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryMosses 
+  )
+
+RMDMosses<-plyr::rename(RMDMosses,c("yi"="RMDMosses"))
+RMDMosses<-plyr::rename(RMDMosses,c("vi"="RMDMosses_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDSOM_Org$RMDSOM_Org))
+if(length(CheckNA)>0) {
+RMDSOM_Org<-RMDSOM_Org[-which(is.na(RMDSOM_Org$RMDSOM_Org)),]}
+
+Mean_RMDMosses<-mean(RMDMosses$RMDMosses)
+Mean_RMDMosses
+
+
+RMDMosses$CI_lb<-RMDMosses$RMDMosses-1.96*sqrt(RMDMosses$RMDMosses_VARIANCE)
+RMDMosses$CI_ub<-RMDMosses$RMDMosses+1.96*sqrt(RMDMosses$RMDMosses_VARIANCE)
+
+
+
+
+
+############### Lichens ###############
+
+df_PLOT_LEVEL_Lichens<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Lichens)),]
+
+dfSummaryLichens<-df_PLOT_LEVEL_Lichens %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Lichens), SDEV=sd(Lichens), SS=n())
+
+dfSummaryLichensCTL <- dfSummaryLichens  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryLichensOTC <- dfSummaryLichens  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryLichens <- full_join(dfSummaryLichensCTL, dfSummaryLichensOTC, by="Dataset_ID")
+
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("MEAN.x"="MEAN_CTL"))
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("MEAN.y"="MEAN_OTC"))
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("SDEV.x"="SDEV_CTL"))
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("SDEV.y"="SDEV_OTC"))
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("SS.x"="SS_CTL"))
+dfSummaryLichens<-plyr::rename(dfSummaryLichens,c("SS.y"="SS_OTC"))
+
+RMDLichens <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryLichens 
+  )
+
+RMDLichens<-plyr::rename(RMDLichens,c("yi"="RMDLichens"))
+RMDLichens<-plyr::rename(RMDLichens,c("vi"="RMDLichens_VARIANCE"))
+
+CheckNA<-which(is.na(RMDLichens$RMDLichens))
+if(length(CheckNA)>0) {
+RMDLichens<-RMDLichens[-which(is.na(RMDLichens$RMDLichens)),]}
+
+Mean_RMDLichens<-mean(RMDLichens$RMDLichens)
+Mean_RMDLichens
+
+
+
+
+
+############### BM ###############
+
+df_PLOT_LEVEL_BM<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$BM)),]
+
+dfSummaryBM<-df_PLOT_LEVEL_BM %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(BM), SDEV=sd(BM), SS=n())
+
+dfSummaryBMCTL <- dfSummaryBM  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryBMOTC <- dfSummaryBM  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryBM <- full_join(dfSummaryBMCTL, dfSummaryBMOTC, by="Dataset_ID")
+
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("MEAN.x"="MEAN_CTL"))
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("MEAN.y"="MEAN_OTC"))
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("SDEV.x"="SDEV_CTL"))
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("SDEV.y"="SDEV_OTC"))
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("SS.x"="SS_CTL"))
+dfSummaryBM<-plyr::rename(dfSummaryBM,c("SS.y"="SS_OTC"))
+
+RMDBM <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryBM 
+  )
+
+RMDBM<-plyr::rename(RMDBM,c("yi"="RMDBM"))
+RMDBM<-plyr::rename(RMDBM,c("vi"="RMDBM_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDBM$RMDBM))
+rowtoremove<-as.numeric(CheckNA)
+if(length(CheckNA)>0) {
+ RMDBM <- RMDBM[-rowtoremove,]}
+
+Mean_RMDBM<-mean(RMDBM$RMDBM)
+Mean_RMDBM
+
+
+#Add confidence intervals
+RMDBM$CI_lb<-RMDBM$RMDBM-1.96*sqrt(RMDBM$RMDBM_VARIANCE)
+RMDBM$CI_ub<-RMDBM$RMDBM+1.96*sqrt(RMDBM$RMDBM_VARIANCE)
+
+
+
+
+
+
+############### Mean_H ###############
+
+df_PLOT_LEVEL_Mean_H<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Mean_H)),]
+
+dfSummaryMean_H<-df_PLOT_LEVEL_Mean_H %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Mean_H), SDEV=sd(Mean_H), SS=n())
+
+dfSummaryMean_HCTL <- dfSummaryMean_H  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryMean_HOTC <- dfSummaryMean_H  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryMean_H <- full_join(dfSummaryMean_HCTL, dfSummaryMean_HOTC, by="Dataset_ID")
+
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("MEAN.x"="MEAN_CTL"))
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("MEAN.y"="MEAN_OTC"))
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("SDEV.x"="SDEV_CTL"))
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("SDEV.y"="SDEV_OTC"))
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("SS.x"="SS_CTL"))
+dfSummaryMean_H<-plyr::rename(dfSummaryMean_H,c("SS.y"="SS_OTC"))
+
+RMDMean_H <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryMean_H 
+  )
+
+RMDMean_H<-plyr::rename(RMDMean_H,c("yi"="RMDMean_H"))
+RMDMean_H<-plyr::rename(RMDMean_H,c("vi"="RMDMean_H_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDMean_H$RMDMean_H))
+if(length(CheckNA)>0) {
+RMDMean_H<-RMDMean_H[-which(is.na(RMDMean_H$RMDMean_H)),]}
+
+Mean_RMDMean_H<-mean(RMDMean_H$RMDMean_H)
+Mean_RMDMean_H
+
+RMDMean_H$CI_lb<-RMDMean_H$RMDMean_H-1.96*sqrt(RMDMean_H$RMDMean_H_VARIANCE)
+RMDMean_H$CI_ub<-RMDMean_H$RMDMean_H+1.96*sqrt(RMDMean_H$RMDMean_H_VARIANCE)
+
+
+# 
+# write.csv(dfSummaryMean_H, "dfSummaryMean_H.csv")
+# write.csv(dfSummaryBM, "dfSummaryBM.csv")
+# write.csv(dfSummaryGraminoids, "dfSummaryGraminoids.csv")
+# write.csv(dfSummaryForbs, "dfSummaryForbs.csv")
+# write.csv(dfSummaryEvergr_Shrubs, "dfSummaryEvergr_Shrubs.csv")
+# write.csv(dfSummaryDecid_Shrubs, "dfSummaryDecid_Shrubs.csv")
+# write.csv(dfSummaryMosses, "dfSummaryMosses.csv")
+# write.csv(dfSummaryLichens, "dfSummaryLichens.csv")
+# # 
+#
+write.csv(RMDGraminoids, "RMDGraminoids.csv")
+write.csv(RMDForbs, "RMDForbs.csv")
+write.csv(RMDDecid_Shrubs, "RMDDecid_Shrubs.csv")
+write.csv(RMDEvergr_Shrubs, "RMDEvergr_Shrubs.csv")
+write.csv(RMDMosses, "RMDMosses.csv")
+write.csv(RMDLichens, "RMDLichens.csv")
+write.csv(RMDBM, "RMDBM.csv")
+write.csv(RMDMean_H, "RMDMean_H.csv")
+# #
+
+
+```
+
+
+##microbial
+
+```{r microbial, echo=FALSE}
+
+############### Bacterial_BM_Weight ###############
+
+df_PLOT_LEVEL_Bacterial_BM_Weight<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Bacterial_BM_Weight)),]
+
+dfSummaryBacterial_BM_Weight<-df_PLOT_LEVEL_Bacterial_BM_Weight %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Bacterial_BM_Weight), SDEV=sd(Bacterial_BM_Weight), SS=n())
+
+dfSummaryBacterial_BM_WeightCTL <- dfSummaryBacterial_BM_Weight  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryBacterial_BM_WeightOTC <- dfSummaryBacterial_BM_Weight  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryBacterial_BM_Weight <- full_join(dfSummaryBacterial_BM_WeightCTL, dfSummaryBacterial_BM_WeightOTC, by="Dataset_ID")
+
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("MEAN.x"="MEAN_CTL"))
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("MEAN.y"="MEAN_OTC"))
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("SDEV.x"="SDEV_CTL"))
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("SDEV.y"="SDEV_OTC"))
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("SS.x"="SS_CTL"))
+dfSummaryBacterial_BM_Weight<-plyr::rename(dfSummaryBacterial_BM_Weight,c("SS.y"="SS_OTC"))
+
+RMDBacterial_BM_Weight <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryBacterial_BM_Weight 
+  )
+
+RMDBacterial_BM_Weight<-plyr::rename(RMDBacterial_BM_Weight,c("yi"="RMDBacterial_BM_Weight"))
+RMDBacterial_BM_Weight<-plyr::rename(RMDBacterial_BM_Weight,c("vi"="RMDBacterial_BM_Weight_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDBacterial_BM_Weight$RMDBacterial_BM_Weight))
+if(length(CheckNA)>0) {
+RMDBacterial_BM_Weight<-RMDBacterial_BM_Weight[-which(is.na(RMDBacterial_BM_Weight$RMDBacterial_BM_Weight)),]}
+
+Mean_RMDBacterial_BM_Weight<-mean(RMDBacterial_BM_Weight$RMDBacterial_BM_Weight)
+Mean_RMDBacterial_BM_Weight
+
+
+RMDBacterial_BM_Weight$CI_lb<-RMDBacterial_BM_Weight$RMDBacterial_BM_Weight-1.96*sqrt(RMDBacterial_BM_Weight$RMDBacterial_BM_Weight_VARIANCE)
+RMDBacterial_BM_Weight$CI_ub<-RMDBacterial_BM_Weight$RMDBacterial_BM_Weight+1.96*sqrt(RMDBacterial_BM_Weight$RMDBacterial_BM_Weight_VARIANCE)
+
+
+
+############### Fungal_BM_Weight ###############
+
+df_PLOT_LEVEL_Fungal_BM_Weight<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$Fungal_BM_Weight)),]
+
+dfSummaryFungal_BM_Weight<-df_PLOT_LEVEL_Fungal_BM_Weight %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(Fungal_BM_Weight), SDEV=sd(Fungal_BM_Weight), SS=n())
+
+dfSummaryFungal_BM_WeightCTL <- dfSummaryFungal_BM_Weight  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryFungal_BM_WeightOTC <- dfSummaryFungal_BM_Weight  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryFungal_BM_Weight <- full_join(dfSummaryFungal_BM_WeightCTL, dfSummaryFungal_BM_WeightOTC, by="Dataset_ID")
+
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("MEAN.x"="MEAN_CTL"))
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("MEAN.y"="MEAN_OTC"))
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("SDEV.x"="SDEV_CTL"))
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("SDEV.y"="SDEV_OTC"))
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("SS.x"="SS_CTL"))
+dfSummaryFungal_BM_Weight<-plyr::rename(dfSummaryFungal_BM_Weight,c("SS.y"="SS_OTC"))
+
+RMDFungal_BM_Weight <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryFungal_BM_Weight 
+  )
+
+RMDFungal_BM_Weight<-plyr::rename(RMDFungal_BM_Weight,c("yi"="RMDFungal_BM_Weight"))
+RMDFungal_BM_Weight<-plyr::rename(RMDFungal_BM_Weight,c("vi"="RMDFungal_BM_Weight_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDFungal_BM_Weight$RMDFungal_BM_Weight))
+if(length(CheckNA)>0) {
+RMDFungal_BM_Weight<-RMDFungal_BM_Weight[-which(is.na(RMDFungal_BM_Weight$RMDFungal_BM_Weight)),]}
+
+Mean_RMDFungal_BM_Weight<-mean(RMDFungal_BM_Weight$RMDFungal_BM_Weight)
+Mean_RMDFungal_BM_Weight
+
+
+#Add confidence intervals
+RMDFungal_BM_Weight$CI_lb<-RMDFungal_BM_Weight$RMDFungal_BM_Weight-1.96*sqrt(RMDFungal_BM_Weight$RMDFungal_BM_Weight_VARIANCE)
+RMDFungal_BM_Weight$CI_ub<-RMDFungal_BM_Weight$RMDFungal_BM_Weight+1.96*sqrt(RMDFungal_BM_Weight$RMDFungal_BM_Weight_VARIANCE)
+
+
+
+
+
+############### FB_Ratio ###############
+
+df_PLOT_LEVEL_FB_Ratio<-df_PLOT_LEVEL[-which(is.na(df_PLOT_LEVEL$FB_Ratio)),]
+
+dfSummaryFB_Ratio<-df_PLOT_LEVEL_FB_Ratio %>% group_by(Dataset_ID, Treatment) %>% dplyr::summarize(MEAN=mean(FB_Ratio), SDEV=sd(FB_Ratio), SS=n())
+
+dfSummaryFB_RatioCTL <- dfSummaryFB_Ratio  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryFB_RatioOTC <- dfSummaryFB_Ratio  %>% dplyr::filter(Treatment=="OTC")
+dfSummaryFB_Ratio <- full_join(dfSummaryFB_RatioCTL, dfSummaryFB_RatioOTC, by="Dataset_ID")
+
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("MEAN.x"="MEAN_CTL"))
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("MEAN.y"="MEAN_OTC"))
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("SDEV.x"="SDEV_CTL"))
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("SDEV.y"="SDEV_OTC"))
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("SS.x"="SS_CTL"))
+dfSummaryFB_Ratio<-plyr::rename(dfSummaryFB_Ratio,c("SS.y"="SS_OTC"))
+
+RMDFB_Ratio <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummaryFB_Ratio 
+  )
+
+RMDFB_Ratio<-plyr::rename(RMDFB_Ratio,c("yi"="RMDFB_Ratio"))
+RMDFB_Ratio<-plyr::rename(RMDFB_Ratio,c("vi"="RMDFB_Ratio_VARIANCE"))
+
+
+CheckNA<-which(is.na(RMDFB_Ratio$RMDFB_Ratio))
+if(length(CheckNA)>0) {
+RMDFB_Ratio<-RMDFB_Ratio[-which(is.na(RMDFB_Ratio$RMDFB_Ratio)),]}
+
+Mean_RMDFB_Ratio<-mean(RMDFB_Ratio$RMDFB_Ratio)
+Mean_RMDFB_Ratio
+
+
+RMDFB_Ratio$CI_lb<-RMDFB_Ratio$RMDFB_Ratio-1.96*sqrt(RMDFB_Ratio$RMDFB_Ratio_VARIANCE)
+RMDFB_Ratio$CI_ub<-RMDFB_Ratio$RMDFB_Ratio+1.96*sqrt(RMDFB_Ratio$RMDFB_Ratio_VARIANCE)
+
+
+write.csv(dfSummaryBacterial_BM_Weight, "dfSummaryBacterial_BM_Weight.csv")
+write.csv(dfSummaryFungal_BM_Weight, "dfSummaryFungal_BM_Weight.csv")
+write.csv(dfSummaryFB_Ratio, "dfSummaryFB_Ratio.csv")
+
+write.csv(RMDBacterial_BM_Weight, "RMDBacterial_BM_Weight.csv")
+write.csv(RMDFungal_BM_Weight, "RMDFungal_BM_Weight.csv")
+write.csv(RMDFB_Ratio, "RMDFB_Ratio.csv")
+
+```
+
+
+

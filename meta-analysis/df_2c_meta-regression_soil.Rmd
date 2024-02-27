@@ -1,0 +1,1648 @@
+---
+title: "meta-regression_soil"
+output:
+  html_document:
+    df_print: paged
+editor_options: 
+  chunk_output_type: inline
+---
+
+#load data
+```{r load data, include=FALSE}
+library("ggplot2")
+library("plyr")
+library("dplyr")
+library("car")
+library("tidyr")
+library("readxl")
+library("reshape2")
+library("tidyverse")
+library("ggrepel")
+library("tibble")
+library("ggforce")
+library("lubridate")
+library("esc")
+library("effsize")
+library("nlme") 
+library("metafor")
+library("corrplot")
+
+df<-read.csv("df_2.csv")
+df_SOM_Org<-read.csv("SMDSOM_Org.csv")
+df_SOM_Min<-read.csv("SMDSOM_Min.csv")
+df_SOC_Org<-read.csv("SMDSOC_Org.csv")
+df_SOC_Min<-read.csv("SMDSOC_Min.csv")
+df_SON_Org<-read.csv("SMDSON_Org.csv")
+df_SON_Min<-read.csv("SMDSON_Min.csv")
+df_CN_Org<-read.csv("SMDCN_Org.csv")
+df_CN_Min<-read.csv("SMDCN_Min.csv")
+df_CN_Org<-read.csv("SMDCN_Org.csv")
+df_pH_Min<-read.csv("SMDpH_Min.csv")
+df_pH_Org<-read.csv("SMDpH_Org.csv")
+df_BD_Org<-read.csv("SMDBD_Org.csv")
+df_BD_Min<-read.csv("SMDBD_Min.csv")
+df_OL_D_Plot<-read.csv("SMDOL_D_Plot.csv")
+
+
+#rename + change data type
+df<-plyr::rename(df,c("ï..Dataset_ID"="Dataset_ID"))
+df$Exp_ID<-as.factor(df$Exp_ID)
+df$Site<-as.factor(df$Site)
+df$Location<-as.factor(df$Location)
+df$Country<-as.factor(df$Country)
+
+df_SOM_Org<-plyr::rename(df_SOM_Org,c("X"="Observation_ID"))
+df_SOM_Org$Dataset_ID<-as.factor(df_SOM_Org$Dataset_ID)
+
+df_SOM_Min<-plyr::rename(df_SOM_Min,c("X"="Observation_ID"))
+df_SOM_Min$Dataset_ID<-as.factor(df_SOM_Min$Dataset_ID)
+
+df_SOC_Org<-plyr::rename(df_SOC_Org,c("X"="Observation_ID"))
+df_SOC_Org$Dataset_ID<-as.factor(df_SOC_Org$Dataset_ID)
+
+df_SOC_Min<-plyr::rename(df_SOC_Min,c("X"="Observation_ID"))
+df_SOC_Min$Dataset_ID<-as.factor(df_SOC_Min$Dataset_ID)
+
+df_SON_Org<-plyr::rename(df_SON_Org,c("X"="Observation_ID"))
+df_SON_Org$Dataset_ID<-as.factor(df_SON_Org$Dataset_ID)
+
+df_SON_Min<-plyr::rename(df_SON_Min,c("X"="Observation_ID"))
+df_SON_Min$Dataset_ID<-as.factor(df_SON_Min$Dataset_ID)
+
+df_CN_Org<-plyr::rename(df_CN_Org,c("X"="Observation_ID"))
+df_CN_Org$Dataset_ID<-as.factor(df_CN_Org$Dataset_ID)
+
+df_CN_Min<-plyr::rename(df_CN_Min,c("X"="Observation_ID"))
+df_CN_Min$Dataset_ID<-as.factor(df_CN_Min$Dataset_ID)
+
+df_pH_Org<-plyr::rename(df_pH_Org,c("X"="Observation_ID"))
+df_pH_Org$Dataset_ID<-as.factor(df_pH_Org$Dataset_ID)
+
+df_pH_Min<-plyr::rename(df_pH_Min,c("X"="Observation_ID"))
+df_pH_Min$Dataset_ID<-as.factor(df_pH_Min$Dataset_ID)
+
+df_BD_Org<-plyr::rename(df_BD_Org,c("X"="Observation_ID"))
+df_BD_Org$Dataset_ID<-as.factor(df_BD_Org$Dataset_ID)
+
+df_BD_Min<-plyr::rename(df_BD_Min,c("X"="Observation_ID"))
+df_BD_Min$Dataset_ID<-as.factor(df_BD_Min$Dataset_ID)
+
+df_OL_D_Plot<-plyr::rename(df_OL_D_Plot,c("X"="Observation_ID"))
+df_OL_D_Plot$Dataset_ID<-as.factor(df_OL_D_Plot$Dataset_ID)
+
+```
+
+#data check
+##numbers
+```{r data check, echo=FALSE}
+# df$SMD_SOM_Org[!is.na(df$SMD_SOM_Org)]
+# df$SMD_SOM_Min[!is.na(df$SMD_SOM_Min)]
+# df$SMD_SOC_Org[!is.na(df$SMD_SOC_Org)]
+# df$SMD_SOC_Min[!is.na(df$SMD_SOC_Min)]
+# df$SMD_SOC_Mix[!is.na(df$SMD_SOC_Mix)]
+# df$SMD_SON_Org[!is.na(df$SMD_SON_Org)]
+# df$SMD_SON_Min[!is.na(df$SMD_SON_Min)]
+# df$SMD_SON_Mix[!is.na(df$SMD_SON_Mix)]
+# df$SMD_CN_Org[!is.na(df$SMD_CN_Org)]
+# df$SMD_CN_Min[!is.na(df$SMD_CN_Min)]
+# df$SMD_pH_Org[!is.na(df$SMD_pH_Org)]
+# df$SMD_pH_Min[!is.na(df$SMD_pH_Min)]
+# df$SMD_pH_Mix[!is.na(df$SMD_pH_Mix)]
+# df$SMD_BD_Org[!is.na(df$SMD_BD_Org)] 
+# df$SMD_BD_Min[!is.na(df$SMD_BD_Min)]
+# df$SMD_OL_D_Plot[!is.na(df$SMD_OL_D_Plot)]
+```
+##distribution
+```{r B Distribution: histograms, echo=FALSE}
+tempSOM_Org<-df[-which(is.na(df$SMD_SOM_Org)),]
+hist(tempSOM_Org$SMD_SOM_Org, xlab="SMD_SOM_Org", ylab="Nr of Datasets", xlim=c(min(tempSOM_Org$SMD_SOM_Org)-2,max(tempSOM_Org$SMD_SOM_Org)+2))
+
+tempSOM_Min<-df[-which(is.na(df$SMD_SOM_Min)),]
+hist(tempSOM_Min$SMD_SOM_Min, xlab="SMD_SOM_Min", ylab="Nr of Datasets", xlim=c(min(tempSOM_Min$SMD_SOM_Min)-2,max(tempSOM_Min$SMD_SOM_Min)+2))
+
+tempSOC_Org<-df[-which(is.na(df$SMD_SOC_Org)),]
+hist(tempSOC_Org$SMD_SOC_Org, xlab="SMD_SOC_Org", ylab="Nr of Datasets", xlim=c(min(tempSOC_Org$SMD_SOC_Org)-2,max(tempSOC_Org$SMD_SOC_Org)+2))
+
+tempSOC_Min<-df[-which(is.na(df$SMD_SOC_Min)),]
+hist(tempSOC_Min$SMD_SOC_Min, xlab="SMD_SOC_Min", ylab="Nr of Datasets", xlim=c(min(tempSOC_Min$SMD_SOC_Min)-2,max(tempSOC_Min$SMD_SOC_Min)+2))
+
+tempSON_Org<-df[-which(is.na(df$SMD_SON_Org)),]
+hist(tempSON_Org$SMD_SON_Org, xlab="SMD_SON_Org", ylab="Nr of Datasets", xlim=c(min(tempSON_Org$SMD_SON_Org)-2,max(tempSON_Org$SMD_SON_Org)+2))
+
+tempSON_Min<-df[-which(is.na(df$SMD_SON_Min)),]
+hist(tempSON_Min$SMD_SON_Min, xlab="SMD_SON_Min", ylab="Nr of Datasets", xlim=c(min(tempSON_Min$SMD_SON_Min)-2,max(tempSON_Min$SMD_SON_Min)+2))
+
+
+tempCN_Org<-df[-which(is.na(df$SMD_CN_Org)),]
+hist(tempCN_Org$SMD_CN_Org, xlab="SMD_CN_Org", ylab="Nr of Datasets", xlim=c(min(tempCN_Org$SMD_CN_Org)-2,max(tempCN_Org$SMD_CN_Org)+2))
+
+tempCN_Min<-df[-which(is.na(df$SMD_CN_Min)),]
+hist(tempCN_Min$SMD_CN_Min, xlab="SMD_CN_Min", ylab="Nr of Datasets", xlim=c(min(tempCN_Min$SMD_CN_Min)-2,max(tempCN_Min$SMD_CN_Min)+2))
+
+temppH_Org<-df[-which(is.na(df$SMD_pH_Org)),]
+hist(temppH_Org$SMD_pH_Org, xlab="SMD_pH_Org", ylab="Nr of Datasets", xlim=c(min(temppH_Org$SMD_pH_Org)-2,max(temppH_Org$SMD_pH_Org)+2))
+
+temppH_Min<-df[-which(is.na(df$SMD_pH_Min)),]
+hist(temppH_Min$SMD_pH_Min, xlab="SMD_pH_Min", ylab="Nr of Datasets", xlim=c(min(temppH_Min$SMD_pH_Min)-2,max(temppH_Min$SMD_pH_Min)+2))
+
+tempBD_Org<-df[-which(is.na(df$SMD_BD_Org)),]
+hist(tempBD_Org$SMD_BD_Org, xlab="SMD_BD_Org", ylab="Nr of Datasets", xlim=c(min(tempBD_Org$SMD_BD_Org)-2,max(tempBD_Org$SMD_BD_Org)+2))
+
+tempBD_Min<-df[-which(is.na(df$SMD_BD_Min)),]
+hist(tempBD_Min$SMD_BD_Min, xlab="SMD_BD_Min", ylab="Nr of Datasets", xlim=c(min(tempBD_Min$SMD_BD_Min)-2,max(tempBD_Min$SMD_BD_Min)+2))
+
+tempOL_D_Plot<-df[-which(is.na(df$SMD_OL_D_Plot)),]
+hist(tempOL_D_Plot$SMD_OL_D_Plot, xlab="SMD_OL_D_Plot", ylab="Nr of Datasets", xlim=c(min(tempOL_D_Plot$SMD_OL_D_Plot)-2,max(tempOL_D_Plot$SMD_OL_D_Plot)+2))
+
+
+```
+
+##correlation
+
+```{r B Collinearity, echo=FALSE}
+# 
+# dfcor<-df[ , which(names(df) %in% c("SMD_SOM_Org", "SMD_SOM_Min", "SMD_SOC_Org", "SMD_SOC_Org", "SMD_SOC_Mix", "SMD_SON_Min", "SMD_SON_Org","SMD_SON_Mix", "SMD_CN_Min", "SMD_CN_Org","SMD_pH_Min","SMD_pH_Org","SMD_pH_Mix", "SMD_BD_Org", "SMD_BD_Min", "SMD_OL_D_Plot"))]
+# cor<- cor(dfcor, use="pairwise.complete.obs")
+# cor
+# 
+# dfcor2<-df[ , which(names(df) %in% c("Hedges_SMD","SMD_SOM_Org", "SMD_SOM_Min", "SMD_SOC_Org", "SMD_SOC_Org", "SMD_SOC_Mix", "SMD_SON_Min", "SMD_SON_Org","SMD_SON_Mix", "SMD_CN_Min", "SMD_CN_Org","SMD_pH_Min","SMD_pH_Org","SMD_pH_Mix", "SMD_BD_Org", "SMD_BD_Min", "SMD_OL_D_Plot"))] 
+# cor2 <- cor(dfcor2, use="pairwise.complete.obs")
+# cor2
+# 
+# par(mfrow=c(1,2))
+# corrplot.mixed(cor, main="Continuous drivers") 
+# corrplot.mixed(cor2, tl.cex=0.7, main="Continuous drivers and response")
+```
+
+
+##effect of OTC
+#### Hedges SMD
+##### SOM_Org
+```{r SOM_Org, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SOM_Org <- df_SOM_Org %>% inner_join(dfsub, by="Dataset_ID")
+df_SOM_Org<- df_SOM_Org %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+
+model1 <- rma.mv(Hedges_SMDSOM_Org, Hedges_SMDSOM_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SOM_Org,control=list(optimizer="optim"))
+#Extra optimizer argument added to fix convergence error)
+summary(model1)
+
+```
+
+
+
+##### SOM_Min
+```{r SOM_Min, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SOM_Min <- df_SOM_Min %>% inner_join(dfsub, by="Dataset_ID")
+df_SOM_Min<- df_SOM_Min %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDSOM_Min, Hedges_SMDSOM_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SOM_Min,control=list(optimizer="optim"))
+#Extra optimizer argument added to fix convergence error)
+summary(model1)
+```
+
+
+
+##### SOC_Org
+```{r SOC_Org, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SOC_Org <- df_SOC_Org %>% inner_join(dfsub, by="Dataset_ID")
+df_SOC_Org<- df_SOC_Org %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDSOC_Org, Hedges_SMDSOC_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SOC_Org,control=list(optimizer="optim"))
+summary(model1)
+```
+
+
+
+##### SOC_Min
+```{r SOC_Min, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SOC_Min <- df_SOC_Min %>% inner_join(dfsub, by="Dataset_ID")
+df_SOC_Min<- df_SOC_Min %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDSOC_Min, Hedges_SMDSOC_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SOC_Min,control=list(optimizer="optim"))
+#Extra optimizer argument added to fix convergence error)
+summary(model1)
+```
+
+
+##### SON_Org
+```{r SON_Org, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SON_Org <- df_SON_Org %>% inner_join(dfsub, by="Dataset_ID")
+df_SON_Org<- df_SON_Org %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDSON_Org, Hedges_SMDSON_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SON_Org)
+summary(model1)
+```
+
+
+
+##### SON_Min
+```{r SON_Min, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SON_Min <- df_SON_Min %>% inner_join(dfsub, by="Dataset_ID")
+df_SON_Min<- df_SON_Min %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDSON_Min, Hedges_SMDSON_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SON_Min,control=list(optimizer="optim"))
+summary(model1)
+```
+
+
+
+##### CN_Org
+```{r CN_Org, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_CN_Org <- df_CN_Org %>% inner_join(dfsub, by="Dataset_ID")
+df_CN_Org<- df_CN_Org %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDCN_Org, Hedges_SMDCN_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_CN_Org)
+summary(model1)
+```
+
+
+
+
+##### CN_Min
+```{r CN_Min, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_CN_Min <- df_CN_Min %>% inner_join(dfsub, by="Dataset_ID")
+df_CN_Min<- df_CN_Min %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDCN_Min, Hedges_SMDCN_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_CN_Min)
+summary(model1)
+```
+
+
+
+
+
+##### pH_Org
+```{r pH_Org, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_pH_Org <- df_pH_Org %>% inner_join(dfsub, by="Dataset_ID")
+df_pH_Org<- df_pH_Org %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDpH_Org, Hedges_SMDpH_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_pH_Org)
+summary(model1)
+```
+
+
+
+##### pH_Min
+```{r pH_Min, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_pH_Min <- df_pH_Min %>% inner_join(dfsub, by="Dataset_ID")
+df_pH_Min<- df_pH_Min %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDpH_Min, Hedges_SMDpH_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_pH_Min
+,control=list(optimizer="optim"))
+#Extra optimizer argument added to fix convergence error)
+summary(model1)
+```
+
+
+
+##### BD_Org
+```{r BD_Org, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_BD_Org <- df_BD_Org %>% inner_join(dfsub, by="Dataset_ID")
+df_BD_Org<- df_BD_Org %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDBD_Org, Hedges_SMDBD_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_BD_Org
+,control=list(optimizer="optim"))
+#Extra optimizer argument added to fix convergence error)
+summary(model1)
+```
+
+
+##### BD_Min
+```{r BD_Min, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_BD_Min <- df_BD_Min %>% inner_join(dfsub, by="Dataset_ID")
+df_BD_Min<- df_BD_Min %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDBD_Min, Hedges_SMDBD_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_BD_Min)
+summary(model1)
+```
+
+
+
+
+
+##### OL_D_Plot
+```{r OL_D_Plot, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_OL_D_Plot <- df_OL_D_Plot %>% inner_join(dfsub, by="Dataset_ID")
+df_OL_D_Plot<- df_OL_D_Plot %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDOL_D_Plot, Hedges_SMDOL_D_Plot_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_OL_D_Plot,control=list(optimizer="optim"))
+summary(model1)
+```
+
+
+
+#### RMD
+<!-- ! They are always called same model name - adjust if needed -->
+##### SOM_Org
+```{r SOM Org, echo=FALSE}
+# Site level values that people gave should be removed from this analysis, otherwise you get bias -- for hedges smd he removes that himself as you cannot calculate a SMD (due to pooled stdev) then but RMD you can. --> need to provide extra line here before these RMD models for soil (RMD = 0: remove). 
+
+# First run full script df_1b to get the csv files
+df_SOM_Org_RMD<-read.csv("RMDSOM_Org.csv")
+df_SOM_Org_RMD<-plyr::rename(df_SOM_Org_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SOM_Org_RMD <- df_SOM_Org_RMD %>% inner_join(dfsub, by="Dataset_ID")
+#remove the site level values (they were kept in so we could use them for the CTL models, and for hedges SMD they are not used anyhow.)
+# df_SOM_Org_RMD <- df_SOM_Org_RMD[-which(df_SOM_Org_RMD$RMDSOM_Org==0),]
+
+model1_RMD <- rma.mv(RMDSOM_Org, RMDSOM_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SOM_Org_RMD)
+summary(model1_RMD)
+
+```
+
+
+##### SOM_Min
+```{r SOM Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_SOM_Min_RMD<-read.csv("RMDSOM_Min.csv")
+df_SOM_Min_RMD<-plyr::rename(df_SOM_Min_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SOM_Min_RMD <- df_SOM_Min_RMD %>% inner_join(dfsub, by="Dataset_ID")
+# df_SOM_Min_RMD <- df_SOM_Min_RMD[-which(df_SOM_Min_RMD$RMDSOM_Min==0),]
+
+model1_RMD <- rma.mv(RMDSOM_Min, RMDSOM_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SOM_Min_RMD)
+summary(model1_RMD)
+
+```
+
+
+
+
+
+##### SOC_Org
+```{r SOC Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_SOC_Org_RMD<-read.csv("RMDSOC_Org.csv")
+df_SOC_Org_RMD<-plyr::rename(df_SOC_Org_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SOC_Org_RMD <- df_SOC_Org_RMD %>% inner_join(dfsub, by="Dataset_ID")
+df_SOC_Org_RMD <- df_SOC_Org_RMD[-which(df_SOC_Org_RMD$RMDSOC_Org==0),]
+
+model1_RMD <- rma.mv(RMDSOC_Org, RMDSOC_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SOC_Org_RMD)
+summary(model1_RMD)
+
+```
+
+
+##### SOC_Min
+```{r SOC Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_SOC_Min_RMD<-read.csv("RMDSOC_Min.csv")
+df_SOC_Min_RMD<-plyr::rename(df_SOC_Min_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SOC_Min_RMD <- df_SOC_Min_RMD %>% inner_join(dfsub, by="Dataset_ID")
+# df_SOC_Min_RMD <- df_SOC_Min_RMD[-which(df_SOC_Min_RMD$RMDSOC_Min==0),]
+
+model1_RMD <- rma.mv(RMDSOC_Min, RMDSOC_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SOC_Min_RMD)
+summary(model1_RMD)
+
+```
+
+
+
+
+##### SON_Org
+```{r SON Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_SON_Org_RMD<-read.csv("RMDSON_Org.csv")
+df_SON_Org_RMD<-plyr::rename(df_SON_Org_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SON_Org_RMD <- df_SON_Org_RMD %>% inner_join(dfsub, by="Dataset_ID")
+
+#original random structure (but didn't work when removing that one with 0 RMD)
+model1_RMDa <- rma.mv(RMDSON_Org, RMDSON_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SON_Org_RMD)
+model1_RMDa
+
+
+#simplified random structure (only worked when removing that one with 0 RMD) --- weird output, decided to report the one before
+df_SON_Org_RMD <- df_SON_Org_RMD[-which(df_SON_Org_RMD$RMDSON_Org==0),]
+
+model1_RMDb <- rma.mv(RMDSON_Org, RMDSON_Org_VARIANCE, random=~ 1 |  Exp_ID / Observation_ID , data=df_SON_Org_RMD)
+model1_RMDb
+```
+
+
+##### SON_Min
+```{r SON Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_SON_Min_RMD<-read.csv("RMDSON_Min.csv")
+df_SON_Min_RMD<-plyr::rename(df_SON_Min_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SON_Min_RMD <- df_SON_Min_RMD %>% inner_join(dfsub, by="Dataset_ID")
+# df_SON_Min_RMD <- df_SON_Min_RMD[-which(df_SON_Min_RMD$RMDSON_Min==0),]
+
+model1_RMD <- rma.mv(RMDSON_Min, RMDSON_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SON_Min_RMD, verbose=TRUE)
+summary(model1_RMD)
+
+```
+
+
+
+
+##### CN_Org
+```{r CN Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_CN_Org_RMD<-read.csv("RMDCN_Org.csv")
+df_CN_Org_RMD<-plyr::rename(df_CN_Org_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_CN_Org_RMD <- df_CN_Org_RMD %>% inner_join(dfsub, by="Dataset_ID")
+# df_CN_Org_RMD <- df_CN_Org_RMD[-which(df_CN_Org_RMD$RMDCN_Org==0),]
+
+model1_RMD <- rma.mv(RMDCN_Org, RMDCN_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_CN_Org_RMD)
+summary(model1_RMD)
+
+```
+
+
+##### CN_Min
+```{r CN Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_CN_Min_RMD<-read.csv("RMDCN_Min.csv")
+df_CN_Min_RMD<-plyr::rename(df_CN_Min_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_CN_Min_RMD <- df_CN_Min_RMD %>% inner_join(dfsub, by="Dataset_ID")
+# df_CN_Min_RMD <- df_CN_Min_RMD[-which(df_CN_Min_RMD$RMDCN_Min==0),]
+
+model1_RMD <- rma.mv(RMDCN_Min, RMDCN_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_CN_Min_RMD)
+summary(model1_RMD)
+
+```
+
+
+
+
+##### pH_Org
+```{r pH Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_pH_Org_RMD<-read.csv("RMDpH_Org.csv")
+df_pH_Org_RMD<-plyr::rename(df_pH_Org_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_pH_Org_RMD <- df_pH_Org_RMD %>% inner_join(dfsub, by="Dataset_ID")
+df_pH_Org_RMD <- df_pH_Org_RMD[-which(df_pH_Org_RMD$RMDpH_Org==0),]
+
+model1_RMD <- rma.mv(RMDpH_Org, RMDpH_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_pH_Org_RMD)
+summary(model1_RMD)
+
+```
+
+
+##### pH_Min
+```{r pH Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_pH_Min_RMD<-read.csv("RMDpH_Min.csv")
+df_pH_Min_RMD<-plyr::rename(df_pH_Min_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_pH_Min_RMD <- df_pH_Min_RMD %>% inner_join(dfsub, by="Dataset_ID")
+df_pH_Min_RMD <- df_pH_Min_RMD[-which(df_pH_Min_RMD$RMDpH_Min==0),]
+
+model1_RMD <- rma.mv(RMDpH_Min, RMDpH_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_pH_Min_RMD)
+summary(model1_RMD)
+
+```
+
+
+
+
+##### BD_Org
+```{r BD Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_BD_Org_RMD<-read.csv("RMDBD_Org.csv")
+df_BD_Org_RMD<-plyr::rename(df_BD_Org_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_BD_Org_RMD <- df_BD_Org_RMD %>% inner_join(dfsub, by="Dataset_ID")
+df_BD_Org_RMD <- df_BD_Org_RMD[-which(df_BD_Org_RMD$RMDBD_Org==0),]
+
+model1_RMD <- rma.mv(RMDBD_Org, RMDBD_Org_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_BD_Org_RMD)
+summary(model1_RMD)
+
+```
+
+
+##### BD_Min
+```{r BD Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_BD_Min_RMD<-read.csv("RMDBD_Min.csv")
+df_BD_Min_RMD<-plyr::rename(df_BD_Min_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_BD_Min_RMD <- df_BD_Min_RMD %>% inner_join(dfsub, by="Dataset_ID")
+df_BD_Min_RMD <- df_BD_Min_RMD[-which(df_BD_Min_RMD$RMDBD_Min==0),]
+
+model1_RMD <- rma.mv(RMDBD_Min, RMDBD_Min_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_BD_Min_RMD)
+summary(model1_RMD)
+
+```
+
+##### OL_D_Plot
+```{r BD Org, echo=FALSE}
+# First run full script df_1b to get the csv files
+df_OL_D_Plot_RMD<-read.csv("RMDOL_D_Plot.csv")
+df_OL_D_Plot_RMD<-plyr::rename(df_OL_D_Plot_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_OL_D_Plot_RMD <- df_OL_D_Plot_RMD %>% inner_join(dfsub, by="Dataset_ID")
+df_OL_D_Plot_RMD <- df_OL_D_Plot_RMD[-which(df_OL_D_Plot_RMD$RMDOL_D_Plot==0),]
+
+model1_RMD <- rma.mv(RMDOL_D_Plot, RMDOL_D_Plot_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_OL_D_Plot_RMD,control=list(optimizer="optim"))
+summary(model1_RMD)
+
+```
+
+
+
+
+#metaregression
+##model output
+```{r single models, echo=FALSE}
+
+RMASOM_Org<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_SOM_Org)
+summary(RMASOM_Org)
+
+RMASOM_Min<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_SOM_Min,control=list(iter.max=500, rel.tol=1e-8))
+summary(RMASOM_Min)
+
+RMASOC_Org<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_SOC_Org)
+summary(RMASOC_Org)
+
+RMASOC_Min<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_SOC_Min,control=list(optimizer="optim"))
+summary(RMASOC_Min)
+
+RMASON_Org<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_SON_Org)
+summary(RMASON_Org)
+
+RMASON_Min<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_SON_Min)
+summary(RMASON_Min)
+
+RMACN_Org<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_CN_Org)
+summary(RMACN_Org)
+
+RMACN_Min<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_CN_Min, control=list(iter.max=500, rel.tol=1e-8) )
+summary(RMACN_Min)
+
+RMApH_Org<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_pH_Org)
+summary(RMApH_Org)
+
+RMApH_Min<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_pH_Min)
+summary(RMApH_Min)
+
+RMABD_Org<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_BD_Org)
+summary(RMABD_Org)
+
+RMABD_Min<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_BD_Min)
+summary(RMABD_Min)
+
+RMAOL_D_Plot<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_OL_D_Plot)
+summary(RMAOL_D_Plot)
+```
+
+
+##pseudoR² 
+```{r function R², echo=FALSE}
+r2_rma.mv<-function(model, null.model) { 
+
+r2.sigma <- (sum(null.model$sigma2) - sum(model$sigma2)) / sum(null.model$sigma2)
+r2.loglik <- 1 - (logLik(model) / logLik(null.model))
+return(cbind(r2.sigma,r2.loglik))
+
+}
+```
+
+```{r Pseudo R² posthoc, echo=FALSE}
+
+#SOM_Org
+subset<-df %>% filter(!is.na(SMD_SOM_Org))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML", control=list(iter.max=500, rel.tol=1e-8)) 
+RMASOM_Org_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_SOM_Org, method="ML")
+
+null.model<-RMAnull
+model<-RMASOM_Org_ml
+r2_SOM_Org<-r2_rma.mv(model, null.model) 
+r2_SOM_Org #r2.loglik = used in manuscript
+
+
+
+#SOM_Min
+subset<-df %>% filter(!is.na(SMD_SOM_Min))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMASOM_Min_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_SOM_Min, method="ML")
+
+null.model<-RMAnull
+model<-RMASOM_Min_ml
+r2_SOM_Min<-r2_rma.mv(model, null.model) 
+r2_SOM_Min #r2.loglik = used in manuscript
+
+
+
+#SOC_Org
+subset<-df %>% filter(!is.na(SMD_SOC_Org))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMASOC_Org_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_SOC_Org, method="ML")
+
+null.model<-RMAnull
+model<-RMASOC_Org_ml
+r2_SOC_Org<-r2_rma.mv(model, null.model) 
+r2_SOC_Org #r2.loglik = used in manuscript
+
+
+
+#SOC_Min
+subset<-df %>% filter(!is.na(SMD_SOC_Min))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMASOC_Min_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_SOC_Min, method="ML",control=list(optimizer="optim"))
+
+null.model<-RMAnull
+model<-RMASOC_Min_ml
+r2_SOC_Min<-r2_rma.mv(model, null.model) 
+r2_SOC_Min #r2.loglik = used in manuscript
+
+
+
+#SON_Org
+subset<-df %>% filter(!is.na(SMD_SON_Org))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMASON_Org_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_SON_Org, method="ML")
+
+null.model<-RMAnull
+model<-RMASON_Org_ml
+r2_SON_Org<-r2_rma.mv(model, null.model) 
+r2_SON_Org #r2.loglik = used in manuscript
+
+
+
+#SON_Min
+subset<-df %>% filter(!is.na(SMD_SON_Min))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMASON_Min_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_SON_Min, method="ML")
+
+null.model<-RMAnull
+model<-RMASON_Min_ml
+r2_SON_Min<-r2_rma.mv(model, null.model) 
+r2_SON_Min #r2.loglik = used in manuscript
+
+
+
+#CN_Org
+subset<-df %>% filter(!is.na(SMD_CN_Org))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMACN_Org_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_CN_Org, method="ML")
+
+null.model<-RMAnull
+model<-RMACN_Org_ml
+r2_CN_Org<-r2_rma.mv(model, null.model) 
+r2_CN_Org #r2.loglik = used in manuscript
+
+
+
+
+#CN_Min
+subset<-df %>% filter(!is.na(SMD_CN_Min))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML", control=list(iter.max=500, rel.tol=1e-8)) 
+RMACN_Min_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_CN_Min, method="ML",control=list(iter.max=500, rel.tol=1e-8))
+
+null.model<-RMAnull
+model<-RMACN_Min_ml
+r2_CN_Min<-r2_rma.mv(model, null.model) 
+r2_CN_Min #r2.loglik = used in manuscript
+
+
+
+
+#pH_Org
+subset<-df %>% filter(!is.na(SMD_pH_Org))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML",control=list(iter.max=500, rel.tol=1e-8)) 
+RMApH_Org_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_pH_Org, method="ML",control=list(iter.max=500, rel.tol=1e-8))
+
+null.model<-RMAnull
+model<-RMApH_Org_ml
+r2_pH_Org<-r2_rma.mv(model, null.model) 
+r2_pH_Org #r2.loglik = used in manuscript
+
+
+
+
+#pH_Min
+subset<-df %>% filter(!is.na(SMD_pH_Min))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMApH_Min_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_pH_Min, method="ML")
+
+null.model<-RMAnull
+model<-RMApH_Min_ml
+r2_pH_Min<-r2_rma.mv(model, null.model) 
+r2_pH_Min #r2.loglik = used in manuscript
+
+
+
+
+#BD_Org
+subset<-df %>% filter(!is.na(SMD_BD_Org))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMABD_Org_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_BD_Org, method="ML")
+
+null.model<-RMAnull
+model<-RMABD_Org_ml
+r2_BD_Org<-r2_rma.mv(model, null.model) 
+r2_BD_Org #r2.loglik = used in manuscript
+
+
+
+#BD_Min
+subset<-df %>% filter(!is.na(SMD_BD_Min))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMABD_Min_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_BD_Min, method="ML")
+
+null.model<-RMAnull
+model<-RMABD_Min_ml
+r2_BD_Min<-r2_rma.mv(model, null.model) 
+r2_BD_Min #r2.loglik = used in manuscript
+
+
+
+#OL_D_Plot
+subset<-df %>% filter(!is.na(SMD_OL_D_Plot))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMAOL_D_Plot_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_OL_D_Plot, method="ML")
+
+null.model<-RMAnull
+model<-RMAOL_D_Plot_ml
+r2_OL_D_Plot<-r2_rma.mv(model, null.model) 
+r2_OL_D_Plot #r2.loglik = used in manuscript
+
+
+
+
+
+
+
+```
+
+##model validation
+```{r model validation, echo=FALSE}
+
+#SOM_Org
+Err<-resid(RMASOM_Org) 
+Fit<-fitted(RMASOM_Org) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD SOM_Org") #normality?
+qqnorm(Err, ylab="residuals SMD SOM_Org", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_SOM_Org)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_SOM_Org, y=Err, xlab="SMD_SOM_Org", ylab="Residuals")
+
+#SOM_Min
+Err<-resid(RMASOM_Min) 
+Fit<-fitted(RMASOM_Min) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD SOM_Min") #normality?
+qqnorm(Err, ylab="residuals SMD SOM_Min", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_SOM_Min)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_SOM_Min, y=Err, xlab="SMD_SOM_Min", ylab="Residuals")
+
+
+#SOC_Org
+Err<-resid(RMASOC_Org) 
+Fit<-fitted(RMASOC_Org) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD SOC_Org") #normality?
+qqnorm(Err, ylab="residuals SMD SOC_Org", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_SOC_Org)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_SOC_Org, y=Err, xlab="SMD_SOC_Org", ylab="Residuals")
+
+#SOC_Min
+Err<-resid(RMASOC_Min) 
+Fit<-fitted(RMASOC_Min) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD SOC_Min") #normality?
+qqnorm(Err, ylab="residuals SMD SOC_Min", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_SOC_Min)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_SOC_Min, y=Err, xlab="SMD_SOC_Min", ylab="Residuals")
+
+
+#SON_Org
+Err<-resid(RMASON_Org) 
+Fit<-fitted(RMASON_Org) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD SON_Org") #normality?
+qqnorm(Err, ylab="residuals SMD SON_Org", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_SON_Org)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_SON_Org, y=Err, xlab="SMD_SON_Org", ylab="Residuals")
+
+#SON_Min
+Err<-resid(RMASON_Min) 
+Fit<-fitted(RMASON_Min) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD SON_Min") #normality?
+qqnorm(Err, ylab="residuals SMD SON_Min", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_SON_Min)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_SON_Min, y=Err, xlab="SMD_SON_Min", ylab="Residuals")
+
+#CN_Org
+Err<-resid(RMACN_Org) 
+Fit<-fitted(RMACN_Org) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD CN_Org") #normality?
+qqnorm(Err, ylab="residuals SMD CN_Org", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_CN_Org)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_CN_Org, y=Err, xlab="SMD_CN_Org", ylab="Residuals")
+
+#CN_Min
+Err<-resid(RMACN_Min) 
+Fit<-fitted(RMACN_Min) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD CN_Min") #normality?
+qqnorm(Err, ylab="residuals SMD CN_Min", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_CN_Min)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_CN_Min, y=Err, xlab="SMD_CN_Min", ylab="Residuals")
+
+
+#pH_Org
+Err<-resid(RMApH_Org) 
+Fit<-fitted(RMApH_Org) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD pH_Org") #normality?
+qqnorm(Err, ylab="residuals SMD pH_Org", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_pH_Org)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_pH_Org, y=Err, xlab="SMD_pH_Org", ylab="Residuals")
+
+#pH_Min
+Err<-resid(RMApH_Min) 
+Fit<-fitted(RMApH_Min) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD pH_Min") #normality?
+qqnorm(Err, ylab="residuals SMD pH_Min", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_pH_Min)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_pH_Min, y=Err, xlab="SMD_pH_Min", ylab="Residuals")
+
+
+#BD_Org
+Err<-resid(RMABD_Org) 
+Fit<-fitted(RMABD_Org) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD BD_Org") #normality?
+qqnorm(Err, ylab="residuals SMD BD_Org", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_BD_Org)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_BD_Org, y=Err, xlab="SMD_BD_Org", ylab="Residuals")
+
+#BD_Min
+Err<-resid(RMABD_Min) 
+Fit<-fitted(RMABD_Min) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD BD_Min") #normality?
+qqnorm(Err, ylab="residuals SMD BD_Min", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_BD_Min)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_BD_Min, y=Err, xlab="SMD_BD_Min", ylab="Residuals")
+
+
+
+
+
+#OL_D_Plot
+Err<-resid(RMAOL_D_Plot) 
+Fit<-fitted(RMAOL_D_Plot) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD OL_D_Plot") #normality?
+qqnorm(Err, ylab="residuals SMD OL_D_Plot", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_OL_D_Plot)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_OL_D_Plot, y=Err, xlab="SMD_OL_D_Plot", ylab="Residuals")
+
+
+
+
+
+```
+
+
+##effect plots
+
+### regplot
+
+```{r effect plots}
+
+regplot.rma(RMASOM_Org, mod="SMD_SOM_Org", xlab="SMD_SOM_Org", ylab="Hedges SMD")
+
+regplot.rma(RMASOM_Min, mod="SMD_SOM_Min", xlab="SMD_SOM_Min", ylab="Hedges SMD")
+
+regplot.rma(RMASOC_Org, mod="SMD_SOC_Org", xlab="SMD_SOC_Org", ylab="Hedges SMD")
+
+regplot.rma(RMASOC_Min, mod="SMD_SOC_Min", xlab="SMD_SOC_Min", ylab="Hedges SMD")
+
+regplot.rma(RMASON_Org, mod="SMD_SON_Org", xlab="SMD_SON_Org", ylab="Hedges SMD")
+
+regplot.rma(RMASON_Min, mod="SMD_SON_Min", xlab="SMD_SON_Min", ylab="Hedges SMD")
+
+regplot.rma(RMACN_Org, mod="SMD_CN_Org", xlab="SMD_CN_Org", ylab="Hedges SMD")
+
+regplot.rma(RMACN_Min, mod="SMD_CN_Min", xlab="SMD_CN_Min", ylab="Hedges SMD")
+
+regplot.rma(RMApH_Org, mod="SMD_pH_Org", xlab="SMD_pH_Org", ylab="Hedges SMD")
+
+regplot.rma(RMApH_Min, mod="SMD_pH_Min", xlab="SMD_pH_Min", ylab="Hedges SMD")
+
+regplot.rma(RMABD_Org, mod="SMD_BD_Org", xlab="SMD_BD_Org", ylab="Hedges SMD")
+
+regplot.rma(RMABD_Min, mod="SMD_BD_Min", xlab="SMD_BD_Min", ylab="Hedges SMD")
+
+regplot.rma(RMAOL_D_Plot, mod="SMD_OL_D_Plot", xlab="SMD_OL_D_Plot", ylab="Hedges SMD")
+
+
+```
+### manuscript (only sign drivers)
+#### SMD_SON_Org
+```{r SMD_SON_Org, echo=FALSE}
+# df #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   SMD_SON_Org  )
+# model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt SMD_SON_Org 
+# 0.5325743299 0.0003941625 
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+SMD_SON_Orgmin<-min(df$SMD_SON_Org, na.rm=T)
+SMD_SON_Orgmax<-max(df$SMD_SON_Org, na.rm=T)
+SMD_SON_Orgmean<-mean(df$SMD_SON_Org, na.rm=T)
+SMD_SON_Orgsd<-sd(df$SMD_SON_Org, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(SMD_SON_Orgmin, SMD_SON_Orgmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.SMD_SON_Org"="newmods")) 
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  
+  
+ ######### FIGURE #######
+ pdf("Ext_Fig_3_c_raw.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=SMD_SON_Org, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+ 
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+ 
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+  
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("SMD TN Organic layer")+#TO DO MANUAL: 
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+
+  geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+  
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = SMD_SON_Orgmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+ 
+annotate("text",  x = SMD_SON_Orgmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```
+
+#### SMD_SON_Min
+```{r SMD_SON_Min, echo=FALSE}
+# df #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   SMD_SON_Min  )
+# model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt SMD_SON_Min 
+# 0.5325743299 0.0003941625 
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+SMD_SON_Minmin<-min(df$SMD_SON_Min, na.rm=T)
+SMD_SON_Minmax<-max(df$SMD_SON_Min, na.rm=T)
+SMD_SON_Minmean<-mean(df$SMD_SON_Min, na.rm=T)
+SMD_SON_Minsd<-sd(df$SMD_SON_Min, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(SMD_SON_Minmin, SMD_SON_Minmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.SMD_SON_Min"="newmods")) 
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  
+  
+ ######### FIGURE #######
+ pdf("Fig_4_a_raw.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=SMD_SON_Min, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+ 
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+ 
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+  
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("SMD TN Mineral layer")+#TO DO MANUAL: 
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+
+  geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+  
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = SMD_SON_Minmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+ 
+annotate("text",  x = SMD_SON_Minmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```
+#### SMD_CN_Min
+```{r SMD_CN_Min, echo=FALSE}
+# df #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   SMD_CN_Min , control=list(iter.max=500, rel.tol=1e-8) )
+# model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt SMD_CN_Min 
+# 0.5325743299 0.0003941625 
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+SMD_CN_Minmin<-min(df$SMD_CN_Min, na.rm=T)
+SMD_CN_Minmax<-max(df$SMD_CN_Min, na.rm=T)
+SMD_CN_Minmean<-mean(df$SMD_CN_Min, na.rm=T)
+SMD_CN_Minsd<-sd(df$SMD_CN_Min, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(SMD_CN_Minmin, SMD_CN_Minmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.SMD_CN_Min"="newmods")) 
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  
+  
+ ######### FIGURE #######
+ pdf("Ext_Fig_3_b_raw.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=SMD_CN_Min, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+ 
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+ 
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+  
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("SMD CN-ratio Mineral layer")+#TO DO MANUAL: 
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+
+  geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+  
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = SMD_CN_Minmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+ 
+annotate("text",  x = SMD_CN_Minmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```
+#### SMD_pH_Min
+```{r SMD_pH_Min, echo=FALSE}
+# df #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   SMD_pH_Min  )
+# model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt SMD_pH_Min 
+# 0.5325743299 0.0003941625 
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+SMD_pH_Minmin<-min(df$SMD_pH_Min, na.rm=T)
+SMD_pH_Minmax<-max(df$SMD_pH_Min, na.rm=T)
+SMD_pH_Minmean<-mean(df$SMD_pH_Min, na.rm=T)
+SMD_pH_Minsd<-sd(df$SMD_pH_Min, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(SMD_pH_Minmin, SMD_pH_Minmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.SMD_pH_Min"="newmods")) 
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  
+  
+ ######### FIGURE #######
+ pdf("Fig_4_b_raw.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=SMD_pH_Min, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+ 
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+ 
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+  
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("SMD pH Mineral layer")+#TO DO MANUAL: 
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+
+  geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+  
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = SMD_pH_Minmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+ 
+annotate("text",  x = SMD_pH_Minmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```
+#### SMD_BD_Min
+```{r SMD_BD_Min, echo=FALSE}
+# df #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   SMD_BD_Min  )
+# model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt SMD_BD_Min 
+# 0.5325743299 0.0003941625 
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+SMD_BD_Minmin<-min(df$SMD_BD_Min, na.rm=T)
+SMD_BD_Minmax<-max(df$SMD_BD_Min, na.rm=T)
+SMD_BD_Minmean<-mean(df$SMD_BD_Min, na.rm=T)
+SMD_BD_Minsd<-sd(df$SMD_BD_Min, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(SMD_BD_Minmin, SMD_BD_Minmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.SMD_BD_Min"="newmods")) 
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+
+  
+  
+  
+  
+ ######### FIGURE #######
+ pdf("Ext_Fig_3_a_raw.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=SMD_BD_Min, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+ 
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+ 
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+  
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("SMD BD Mineral layer")+#TO DO MANUAL: 
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+
+  geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+  
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = SMD_BD_Minmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+ 
+annotate("text",  x = SMD_BD_Minmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```

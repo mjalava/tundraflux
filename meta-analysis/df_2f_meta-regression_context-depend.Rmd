@@ -1,0 +1,2472 @@
+---
+title: "metaregression_context"
+output:
+  html_document:
+    df_print: paged
+editor_options: 
+  chunk_output_type: inline
+---
+
+#load data
+
+```{r load data, include=FALSE}
+library("ggplot2")
+library("plyr")
+library("dplyr")
+library("car")
+library("tidyr")
+library("readxl")
+library("reshape2")
+library("tidyverse")
+library("ggrepel")
+library("tibble")
+library("ggforce")
+library("lubridate")
+library("esc")
+library("effsize")
+library("nlme") #for Variogram
+library("metafor")
+library("corrplot")
+library("MASS")
+library("meta")
+library("metafor")
+library("installr")
+library("crayon")
+library("stringr")
+library("tibble")
+library("multcomp") #"for post hoc tests"
+
+df<-read.csv("df_2.csv")
+
+#rename
+df<-plyr::rename(df,c("ï..Dataset_ID"="Dataset_ID"))
+
+#change data types
+df$Dataset_ID<-as.factor(df$Dataset_ID)
+df$Exp_ID<-as.factor(df$Exp_ID)
+df$Site<-as.factor(df$Site)
+df$Location<-as.factor(df$Location)
+df$Country<-as.factor(df$Country)
+df$Zone<-as.factor(df$Zone)
+df$Soil_Moist_CAT<-as.factor(df$Soil_Moist_CAT)
+df$Veg_Class<-as.factor(df$Veg_Class)
+df$pH_Class<-as.factor(df$pH_Class)
+
+#reorder 
+levels(df$Zone)
+df$Zone = factor(df$Zone,levels(df$Zone)[c(1, 3, 2)])
+levels(df$Zone)
+levels(df$pH_Class)
+df$pH_Class = factor(df$pH_Class,levels(df$pH_Class)[c(2, 3, 1)])
+levels(df$pH_Class)
+
+```
+
+#data check
+##numbers
+```{r data check, echo=FALSE}
+# df$PFprob
+# df$Soil_C_stock
+# df$NPP
+
+# df$Air_Temp_CTL
+# df$Soil_Temp_CTL
+# df$Soil_Moist_CTL
+# df$SOM_Min_CTL
+# df$SOM_Org_CTL
+# df$SOC_Min_CTL
+# df$SOC_Org_CTL
+# df$SOC_Mix_CTL
+# df$SON_Min_CTL
+# df$SON_Org_CTL
+# df$SON_Mix_CTL
+# df$CN_Min_CTL
+# df$CN_Org_CTL
+# df$pH_Min_CTL
+# df$pH_Org_CTL
+# df$pH_Mix_CTL
+# df$BD_Min_CTL
+# df$BD_Org_CTL
+# df$OL_D_Plot_CTL
+```
+
+##distribution
+```{r distribution, echo=FALSE}
+
+df %>% 
+    filter(!is.na(PFprob))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=PFprob))
+
+
+df %>%
+    filter(!is.na(Soil_C_stock))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=Soil_C_stock))
+
+
+df %>%
+    filter(!is.na(NPP))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=NPP))
+
+
+
+df %>% 
+    filter(!is.na(Air_Temp_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=Air_Temp_CTL))
+df %>% 
+    filter(!is.na(Soil_Temp_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=Soil_Temp_CTL))
+df %>% 
+    filter(!is.na(Soil_Moist_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=Soil_Moist_CTL))
+
+df %>% 
+    filter(!is.na(SOM_Min_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=SOM_Min_CTL))
+df %>% 
+    filter(!is.na(SOM_Org_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=SOM_Org_CTL))
+
+df %>% 
+    filter(!is.na(SOC_Min_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=SOC_Min_CTL))
+df %>% 
+    filter(!is.na(SOC_Org_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=SOC_Org_CTL))
+
+df %>% 
+    filter(!is.na(SON_Min_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=SON_Min_CTL))
+df %>% 
+    filter(!is.na(SON_Org_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=SON_Org_CTL))
+
+
+df %>% 
+    filter(!is.na(CN_Min_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=CN_Min_CTL))
+df %>% 
+    filter(!is.na(CN_Min_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=CN_Min_CTL))
+
+df %>% 
+    filter(!is.na(pH_Min_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=pH_Min_CTL))
+df %>% 
+    filter(!is.na(pH_Org_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=pH_Org_CTL))
+
+df %>% 
+    filter(!is.na(BD_Min_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=BD_Min_CTL))
+df %>% 
+    filter(!is.na(BD_Org_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=BD_Org_CTL))
+
+df %>% 
+    filter(!is.na(OL_D_Plot_CTL))  %>%  ggplot() +
+    geom_histogram(mapping = aes(x=OL_D_Plot_CTL))
+
+
+```
+
+##correlation
+```{r correlation, echo=FALSE}
+
+dfcor<-df[ , which(names(df) %in% c("PFprob", "Soil_C_stock", "NPP", "Air_Temp_CTL", "Soil_Temp_CTL", "Soil_Moist_CTL", "SOM_Min_CTL","SOM_Org_CTL", "SOC_Min_CTL", "SOC_Org_CTL", "SON_Min_CTL", "SON_Org_CTL", "CN_Min_CTL", "CN_Org_CTL","pH_Min_CTL", "pH_Org_CTL", "BD_Min_CTL", "BD_Org_CTL", "OL_D_Plot"))]
+cor<- cor(dfcor, use="pairwise.complete.obs")
+cor
+
+dfcor2<-df[ , which(names(df) %in% c("Hedges_SMD","PFprob", "Soil_C_stock", "NPP", "Air_Temp_CTL", "Soil_Temp_CTL", "Soil_Moist_CTL", "SOM_Min_CTL","SOM_Org_CTL", "SOC_Min_CTL", "SOC_Org_CTL", "SON_Min_CTL", "SON_Org_CTL", "CN_Min_CTL", "CN_Org_CTL","pH_Min_CTL", "pH_Org_CTL", "BD_Min_CTL", "BD_Org_CTL", "OL_D_Plot"))] 
+cor2 <- cor(dfcor2, use="pairwise.complete.obs")
+cor2
+
+# par(mfrow=c(1,2))
+# corrplot.mixed(cor, main="Continuous drivers") 
+# corrplot.mixed(cor2, tl.cex=0.7, main="Continuous drivers and response")
+```
+
+
+# metaregression
+##model output
+
+```{r single factor models, echo=FALSE}
+RMAZONE<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Zone)
+# 
+# df$SON_Min_CTL[which(df$Dataset_ID=="ICE_1_ER_2007")]<-NA
+# df$SON_Min_CTL[which(df$Dataset_ID=="ICE_1_ER_2008")]<-NA
+# df$SON_Min_CTL[which(df$Dataset_ID=="ALA_1_ER_2010")]<-NA
+# df$SON_Min_CTL[which(df$Dataset_ID=="ALA_1_ER_2011")]<-NA
+
+
+RMAPF<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~PFprob)
+
+RMASMCAT<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Soil_Moist_CAT)
+
+RMAPH<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~pH_Class)
+
+RMASOILCSTOCK<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Soil_C_stock)
+
+RMAVEGCLASS<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Veg_Class)
+
+RMANPP<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~NPP)
+
+RMAZONE
+RMAPF
+RMASMCAT
+RMAPH
+RMASOILCSTOCK
+RMAVEGCLASS
+RMANPP
+
+
+RMAAIRTEMPCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Air_Temp_CTL)
+
+RMASOILTEMPCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Soil_Temp_CTL)
+
+RMASOILMOISTCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Soil_Moist_CTL)
+
+RMASOMMINCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SOM_Min_CTL,control=list(iter.max=500, rel.tol=1e-8))
+
+RMASOMORGCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SOM_Org_CTL)
+
+RMASOCMINCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SOC_Min_CTL)
+
+RMASOCORGCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SOC_Org_CTL,control=list(iter.max=500, rel.tol=1e-8))
+
+RMASONMINCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SON_Min_CTL)
+
+RMASONORGCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SON_Org_CTL)
+
+RMACNMINCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~CN_Min_CTL)
+
+RMACNORGCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~CN_Org_CTL)
+
+RMAPHMINCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~pH_Min_CTL)
+
+RMAPHORGCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~pH_Org_CTL)
+
+RMABDMINCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~BD_Min_CTL)
+
+RMABDORGCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~BD_Org_CTL)
+
+RMAOLDPLOTCTL<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~OL_D_Plot_CTL)
+
+
+
+
+RMAAIRTEMPCTL
+RMASOILTEMPCTL
+RMASOILMOISTCTL
+RMASOMMINCTL
+RMASOMORGCTL
+RMASOCMINCTL
+RMASOCORGCTL
+RMASONMINCTL
+RMASONORGCTL
+RMACNMINCTL
+RMACNORGCTL
+RMAPHMINCTL
+RMAPHORGCTL
+RMABDMINCTL
+RMABDORGCTL
+RMAOLDPLOTCTL
+
+```
+
+
+##pseudoR²
+
+```{r function, echo=FALSE}
+
+r2_rma.mv<-function(model, null.model) { #2 models of class rma.mv (null model is the intercept only model)
+
+r2.sigma <- (sum(null.model$sigma2) - sum(model$sigma2)) / sum(null.model$sigma2)
+r2.loglik <- 1 - (logLik(model) / logLik(null.model))
+return(cbind(r2.sigma,r2.loglik))
+
+}
+```
+
+```{r pseudoR²}
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(Veg_Class))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMAVEGCLASS_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Veg_Class, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMAVEGCLASS_ml
+r2_VEGCLASS<-r2_rma.mv(model, null.model)
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(Zone))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMAZONE_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Zone, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMAZONE_ml
+r2_ZONE<-r2_rma.mv(model, null.model)
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(Soil_C_stock))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMASOILCSTOCK_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Soil_C_stock, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMASOILCSTOCK_ml
+r2_SOILCSTOCK<-r2_rma.mv(model, null.model)
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(pH_Class))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMAPH_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ pH_Class, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMAPH_ml
+r2_PH<-r2_rma.mv(model, null.model)
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(PFprob))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMAPFPROB_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ PFprob, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMAPFPROB_ml
+r2_PFPROB<-r2_rma.mv(model, null.model)
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(Soil_Moist_CAT))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMASOILMOIST_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Soil_Moist_CAT, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMASOILMOIST_ml
+r2_SOILMOIST<-r2_rma.mv(model, null.model)
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(NPP))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMANPP_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ NPP, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMANPP_ml
+r2_NPP<-r2_rma.mv(model, null.model)
+
+
+r2_ZONE
+r2_PFPROB
+r2_SOILMOIST
+r2_PH
+r2_SOILCSTOCK
+r2_VEGCLASS
+r2_NPP
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(Air_Temp_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMAAir_Temp_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Air_Temp_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMAAir_Temp_CTL_ml
+r2_Air_Temp_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(Soil_Temp_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMASoil_Temp_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Soil_Temp_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMASoil_Temp_CTL_ml
+r2_Soil_Temp_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(Soil_Moist_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMASoil_Moist_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Soil_Moist_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMASoil_Moist_CTL_ml
+r2_Soil_Moist_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(SOM_Org_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMASOM_Org_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ SOM_Org_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMASOM_Org_CTL_ml
+r2_SOM_Org_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(SOM_Min_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMASOM_Min_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ SOM_Min_CTL, method="ML",control=list(rel.tol=1e-8))
+
+#R²
+
+null.model<-RMAn
+model<-RMASOM_Min_CTL_ml
+r2_SOM_Min_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(SOC_Org_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMASOC_Org_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ SOC_Org_CTL, method="ML",,control=list(iter.max=500, rel.tol=1e-8))
+
+#R²
+
+null.model<-RMAn
+model<-RMASOC_Org_CTL_ml
+r2_SOC_Org_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(SOC_Min_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMASOC_Min_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ SOC_Min_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMASOC_Min_CTL_ml
+r2_SOC_Min_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(SON_Org_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMASON_Org_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ SON_Org_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMASON_Org_CTL_ml
+r2_SON_Org_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(SON_Min_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMASON_Min_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ SON_Min_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMASON_Min_CTL_ml
+r2_SON_Min_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(CN_Org_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMACN_Org_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ CN_Org_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMACN_Org_CTL_ml
+r2_CN_Org_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(CN_Min_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMACN_Min_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ CN_Min_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMACN_Min_CTL_ml
+r2_CN_Min_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(pH_Org_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMApH_Org_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ pH_Org_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMApH_Org_CTL_ml
+r2_pH_Org_CTL<-r2_rma.mv(model, null.model)
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(pH_Min_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMApH_Min_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ pH_Min_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMApH_Min_CTL_ml
+r2_pH_Min_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(BD_Org_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMABD_Org_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ BD_Org_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMABD_Org_CTL_ml
+r2_BD_Org_CTL<-r2_rma.mv(model, null.model)
+#
+#
+#
+
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(BD_Min_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMABD_Min_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ BD_Min_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMABD_Min_CTL_ml
+r2_BD_Min_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+#RMAn null model but for same subset of observations as driver data
+df_sub<-df %>% filter(!is.na(OL_D_Plot_CTL))
+
+RMAn<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML")
+
+RMAOL_D_Plot_CTL_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_sub, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ OL_D_Plot_CTL, method="ML")
+
+#R²
+
+null.model<-RMAn
+model<-RMAOL_D_Plot_CTL_ml
+r2_OL_D_Plot_CTL<-r2_rma.mv(model, null.model)
+
+
+
+
+
+
+
+
+r2_Air_Temp_CTL
+r2_Soil_Temp_CTL
+r2_Soil_Moist_CTL
+
+r2_SOM_Min_CTL
+r2_SOM_Org_CTL
+
+r2_SOC_Min_CTL
+r2_SOC_Org_CTL
+
+r2_SON_Min_CTL
+r2_SON_Org_CTL
+
+r2_CN_Min_CTL
+r2_CN_Org_CTL
+
+r2_pH_Min_CTL
+r2_pH_Org_CTL
+
+r2_BD_Min_CTL
+r2_BD_Org_CTL
+
+r2_OL_D_Plot_CTL
+
+
+```
+
+
+##model validation
+###part1
+```{r model validation part 1, echo=FALSE}
+#ZONE
+Err<-resid(RMAZONE) 
+Fit<-fitted(RMAZONE) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAZONE - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values ZONE") #normality?
+qqnorm(Err, ylab="residuals ZONE", xlab="scores") 
+# profile.rma.mv(RMAZONE)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,Zone)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$Zone, y=Err, xlab="Zone", ylab="Residuals")
+
+#PF
+Err<-resid(RMAPF) 
+Fit<-fitted(RMAPF) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAPF - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values PF") #normality?
+qqnorm(Err, ylab="residuals PF", xlab="scores") 
+# profile.rma.mv(RMAPF)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,PFprob)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$PFprob, y=Err, xlab="PFprob", ylab="Residuals")
+
+#SMCAT
+Err<-resid(RMASMCAT) 
+Fit<-fitted(RMASMCAT) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMASMCAT - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMCAT") #normality?
+qqnorm(Err, ylab="residuals SMCAT", xlab="scores") 
+# profile.rma.mv(RMASMCAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,Soil_Moist_CAT)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$Soil_Moist_CAT, y=Err, xlab="Soil_Moist_CAT", ylab="Residuals")
+
+#PH
+Err<-resid(RMAPH) 
+Fit<-fitted(RMAPH) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAPH - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values PH") #normality?
+qqnorm(Err, ylab="residuals PH", xlab="scores") 
+# profile.rma.mv(RMAPH)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,pH_Class)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$pH_Class, y=Err, xlab="pH_Class", ylab="Residuals")
+
+#SOILCSTOCK
+Err<-resid(RMASOILCSTOCK) 
+Fit<-fitted(RMASOILCSTOCK) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMASOILCSTOCK - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SOILCSTOCK") #normality?
+qqnorm(Err, ylab="residuals SOILCSTOCK", xlab="scores") 
+# profile.rma.mv(RMASOILCSTOCK)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,Soil_C_stock)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$Soil_C_stock, y=Err, xlab="Soil_C_stock", ylab="Residuals")
+
+#VEGCLASS
+Err<-resid(RMAVEGCLASS) 
+Fit<-fitted(RMAVEGCLASS) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAVEGCLASS - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values VEGCLASS") #normality?
+qqnorm(Err, ylab="residuals VEGCLASS", xlab="scores") 
+# profile.rma.mv(RMAVEGCLASS)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,Veg_Class)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$Veg_Class, y=Err, xlab="Veg_Class", ylab="Residuals")
+
+#NPP
+Err<-resid(RMANPP) 
+Fit<-fitted(RMANPP) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMANPP - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values NPP") #normality?
+qqnorm(Err, ylab="residuals NPP", xlab="scores") 
+# profile.rma.mv(RMANPP)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,NPP)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$NPP, y=Err, xlab="NPP", ylab="Residuals")
+```
+
+###part2
+```{r}
+#AIRTEMPCTL
+Err<-resid(RMAAIRTEMPCTL) 
+Fit<-fitted(RMAAIRTEMPCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAIRTEMPCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values AIRTEMPCTL") #normality?
+qqnorm(Err, ylab="residuals AIRTEMPCTL", xlab="scores") 
+# profile.rma.mv(RMAAIRTEMPCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,Air_Temp_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$Air_Temp_CTL, y=Err, xlab="Air_Temp_CTL", ylab="Residuals")
+
+
+#SOILTEMPCTL
+Err<-resid(RMASOILTEMPCTL) 
+Fit<-fitted(RMASOILTEMPCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMASOILTEMPCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SOILTEMPCTL") #normality?
+qqnorm(Err, ylab="residuals SOILTEMPCTL", xlab="scores") 
+# profile.rma.mv(RMASOILTEMPCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,Soil_Temp_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$Soil_Temp_CTL, y=Err, xlab="Soil_Temp_CTL", ylab="Residuals")
+
+
+#SOILMOISTCTL
+Err<-resid(RMASOILMOISTCTL) 
+Fit<-fitted(RMASOILMOISTCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMASOILMOISTCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SOILMOISTCTL") #normality?
+qqnorm(Err, ylab="residuals SOILMOISTCTL", xlab="scores") 
+# profile.rma.mv(RMASOILMOISTCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,Soil_Moist_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$Soil_Moist_CTL, y=Err, xlab="Soil_Moist_CTL", ylab="Residuals")
+
+
+#SOMMINCTL
+Err<-resid(RMASOMMINCTL) 
+Fit<-fitted(RMASOMMINCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMASOMMINCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SOMMINCTL") #normality?
+qqnorm(Err, ylab="residuals SOMMINCTL", xlab="scores") 
+# profile.rma.mv(RMASOMMINCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SOM_Min_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SOM_Min_CTL, y=Err, xlab="SOM_Min_CTL", ylab="Residuals")
+
+
+#SOMORGCTL
+Err<-resid(RMASOMORGCTL) 
+Fit<-fitted(RMASOMORGCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMASOMORGCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SOMORGCTL") #normality?
+qqnorm(Err, ylab="residuals SOMORGCTL", xlab="scores") 
+# profile.rma.mv(RMASOMORGCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SOM_Org_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SOM_Org_CTL, y=Err, xlab="SOM_Org_CTL", ylab="Residuals")
+
+
+#SOCMINCTL
+Err<-resid(RMASOCMINCTL) 
+Fit<-fitted(RMASOCMINCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMASOCMINCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SOCMINCTL") #normality?
+qqnorm(Err, ylab="residuals SOCMINCTL", xlab="scores") 
+# profile.rma.mv(RMASOCMINCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SOC_Min_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SOC_Min_CTL, y=Err, xlab="SOC_Min_CTL", ylab="Residuals")
+
+
+#SOCORGCTL
+Err<-resid(RMASOCORGCTL) 
+Fit<-fitted(RMASOCORGCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMASOCORGCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SOCORGCTL") #normality?
+qqnorm(Err, ylab="residuals SOCORGCTL", xlab="scores") 
+# profile.rma.mv(RMASOCORGCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SOC_Org_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SOC_Org_CTL, y=Err, xlab="SOC_Org_CTL", ylab="Residuals")
+
+
+
+#SONMINCTL
+Err<-resid(RMASONMINCTL) 
+Fit<-fitted(RMASONMINCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMASONMINCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SONMINCTL") #normality?
+qqnorm(Err, ylab="residuals SONMINCTL", xlab="scores") 
+# profile.rma.mv(RMASONMINCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SON_Min_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SON_Min_CTL, y=Err, xlab="SON_Min_CTL", ylab="Residuals")
+
+
+
+#CNMINCTL
+Err<-resid(RMACNMINCTL) 
+Fit<-fitted(RMACNMINCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMACNMINCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values CNMINCTL") #normality?
+qqnorm(Err, ylab="residuals CNMINCTL", xlab="scores") 
+# profile.rma.mv(RMACNMINCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,CN_Min_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$CN_Min_CTL, y=Err, xlab="CN_Min_CTL", ylab="Residuals")
+
+
+#CNORGCTL
+Err<-resid(RMACNORGCTL) 
+Fit<-fitted(RMACNORGCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMACNORGCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values CNORGCTL") #normality?
+qqnorm(Err, ylab="residuals CNORGCTL", xlab="scores") 
+# profile.rma.mv(RMACNORGCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,CN_Org_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$CN_Org_CTL, y=Err, xlab="CN_Org_CTL", ylab="Residuals")
+
+
+#PHMINCTL
+Err<-resid(RMAPHMINCTL) 
+Fit<-fitted(RMAPHMINCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAPHMINCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values PHMINCTL") #normality?
+qqnorm(Err, ylab="residuals PHMINCTL", xlab="scores") 
+# profile.rma.mv(RMAPHMINCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,pH_Min_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$pH_Min_CTL, y=Err, xlab="pH_Min_CTL", ylab="Residuals")
+
+
+
+#PHORGCTL
+Err<-resid(RMAPHORGCTL) 
+Fit<-fitted(RMAPHORGCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAPHORGCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values PHORGCTL") #normality?
+qqnorm(Err, ylab="residuals PHORGCTL", xlab="scores") 
+# profile.rma.mv(RMAPHORGCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,pH_Org_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$pH_Org_CTL, y=Err, xlab="pH_Org_CTL", ylab="Residuals")
+
+
+
+
+#BDMINCTL
+Err<-resid(RMABDMINCTL) 
+Fit<-fitted(RMABDMINCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMABDMINCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values BDMINCTL") #normality?
+qqnorm(Err, ylab="residuals BDMINCTL", xlab="scores") 
+# profile.rma.mv(RMABDMINCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,BD_Min_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$BD_Min_CTL, y=Err, xlab="BD_Min_CTL", ylab="Residuals")
+
+
+
+#BDORGCTL
+Err<-resid(RMABDORGCTL) 
+Fit<-fitted(RMABDORGCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMABDORGCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values BDORGCTL") #normality?
+qqnorm(Err, ylab="residuals BDORGCTL", xlab="scores") 
+# profile.rma.mv(RMABDORGCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,BD_Org_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$BD_Org_CTL, y=Err, xlab="BD_Org_CTL", ylab="Residuals")
+
+
+
+#OLDPLOTCTL
+Err<-resid(RMAOLDPLOTCTL) 
+Fit<-fitted(RMAOLDPLOTCTL) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAOLDPLOTCTL - Residuals vs fitted")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values OLDPLOTCTL") #normality?
+qqnorm(Err, ylab="residuals OLDPLOTCTL", xlab="scores") 
+# profile.rma.mv(RMAOLDPLOTCTL)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,OL_D_Plot_CTL)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$OL_D_Plot_CTL, y=Err, xlab="OL_D_Plot_CTL", ylab="Residuals")
+
+```
+
+
+##effect plots
+###regplots
+```{r effect plots, echo=FALSE}
+#numeric only
+regplot.rma(RMAPF, mod="PFprob", xlab="PFprob", ylab="SMD")
+
+regplot.rma(RMASOILCSTOCK, mod="Soil_C_stock", xlab="Soil_C_stock", ylab="SMD")
+
+regplot.rma(RMANPP, mod="NPP", xlab="NPP", ylab="SMD")
+
+
+
+
+regplot.rma(RMAAIRTEMPCTL, mod="Air_Temp_CTL", xlab="Air_Temp_CTL", ylab="SMD")
+
+regplot.rma(RMASOILTEMPCTL, mod="Soil_Temp_CTL", xlab="Soil_Temp_CTL", ylab="SMD")
+
+regplot.rma(RMASOILMOISTCTL, mod="Soil_Moist_CTL", xlab="Soil_Moist_CTL", ylab="SMD")
+
+regplot.rma(RMASOMMINCTL, mod="SOM_Min_CTL", xlab="SOM_Min_CTL", ylab="SMD")
+
+regplot.rma(RMASOMORGCTL, mod="SOM_Org_CTL", xlab="SOM_Org_CTL", ylab="SMD")
+
+regplot.rma(RMASOCMINCTL, mod="SOC_Min_CTL", xlab="SOC_Min_CTL", ylab="SMD")
+
+regplot.rma(RMASOCORGCTL, mod="SOC_Org_CTL", xlab="SOC_Org_CTL", ylab="SMD")
+
+regplot.rma(RMASONMINCTL, mod="SON_Min_CTL", xlab="SON_Min_CTL", ylab="SMD")
+
+regplot.rma(RMASONORGCTL, mod="SON_Org_CTL", xlab="SON_Org_CTL", ylab="SMD")
+
+regplot.rma(RMACNMINCTL, mod="CN_Min_CTL", xlab="CN_Min_CTL", ylab="SMD")
+
+regplot.rma(RMACNORGCTL, mod="CN_Org_CTL", xlab="CN_Org_CTL", ylab="SMD")
+
+regplot.rma(RMAPHMINCTL, mod="pH_Min_CTL", xlab="pH_Min_CTL", ylab="SMD")
+
+regplot.rma(RMAPHORGCTL, mod="pH_Org_CTL", xlab="pH_Org_CTL", ylab="SMD")
+
+regplot.rma(RMABDMINCTL, mod="BD_Min_CTL", xlab="BD_Min_CTL", ylab="SMD")
+
+regplot.rma(RMABDORGCTL, mod="BD_Org_CTL", xlab="BD_Org_CTL", ylab="SMD")
+
+regplot.rma(RMAOLDPLOTCTL, mod="OL_D_Plot_CTL", xlab="OL_D_Plot_CTL", ylab="SMD")
+
+```
+### manuscript plots
+####CLIMATE
+##### Zone
+```{r Zone}
+ #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   Zone  ,
+                       control=list(optimizer="optim", optmethod="BFGS"))
+model
+
+
+#ORDER OF FACTOR LEVELS IN MODEL
+contr.treatment(levels(df$Zone)) 
+# Alpine                                  0           0
+# Low arctic/subarctic                    1           0
+# High arctic                             0           1
+
+#COMPARE WITH ORDER IN DATA
+levels(df$Zone)
+# see also section "reorder" above" - make sure the naming is also the same! so here removed 'subarctic'
+levels(df$Zone) <- c("Alpine", "Low Arctic", "High Arctic")
+
+
+Qm<-model$QM
+p_value<-model$QMp
+N1<-length(which(df$Zone=="Alpine"))
+N2<-length(which(df$Zone=="Low Arctic"))
+N3<-length(which(df$Zone=="High Arctic"))
+
+#MODEL PREDICTIONS
+Alpinemean<-model$beta[[1]] #double brackets [[]] makes sure you don't get the name with it (Intercept)
+LowArcticmean<-model$beta[[1]]+model$beta[[2]]
+HighArcticmean <-model$beta[[1]]+model$beta[[3]]
+#TO DO MANUAL
+
+# standard errors Cont = sterr of intercept, sterr Discont, LowArctic : you need the vcov matrix for this
+# summary(model)
+# vcov(model)
+vc_cov<-vcov(model)
+
+Alpinese <-model$se[[1]]
+LowArcticse<-sqrt(vc_cov[1,1]+vc_cov[2,2]+2*vc_cov[1,2])
+HighArcticse<-sqrt(vc_cov[1,1]+vc_cov[3,3]+2*vc_cov[1,3]) #standard error of HighArctic
+#TO DO MANUAL
+
+# 95%CI calculation: mean +/- 1.96*SE
+Alpinelower<-Alpinemean-1.96*Alpinese
+Alpineupper<-Alpinemean+1.96*Alpinese
+LowArcticlower<-LowArcticmean-1.96*LowArcticse
+LowArcticupper<-LowArcticmean+1.96*LowArcticse
+HighArcticlower<-HighArcticmean-1.96*HighArcticse
+HighArcticupper<-HighArcticmean+1.96*HighArcticse
+#TO DO MANUAL
+
+# Plotting mean with standard errors (confidence intervals): store them in dfs
+ d=data.frame(Zone=c("Alpine", "Low Arctic","High Arctic"),
+           mean=c(Alpinemean,LowArcticmean, HighArcticmean ),
+             lower=c( Alpinelower,LowArcticlower,HighArcticlower),
+            upper=c( Alpineupper,LowArcticupper,HighArcticupper))
+#TO DO MANUAL
+
+ 
+ #colourblind friendly figures
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+ 
+ 
+#Model output to add to the figure as label (only Qm and p-value here)
+  eqn <- sprintf(
+    "italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.2g",
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R² BEHIND, NOW ADDED QM INSTEAD
+  
+
+  
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N1
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  eqn3 <- sprintf(
+    "italic(N) == %.0f",
+   N2
+  )
+  
+  parse(text = eqn3)
+  eqn3
+  
+  
+  
+  
+  eqn4<- sprintf(
+    "italic(N) == %.0f",
+   N3
+  )
+  
+  parse(text = eqn4)
+  eqn4
+  
+  
+################
+ pdf("Ext_Fig_2_a_raw.pdf", width=14, height=10)
+
+#ACTUAL DATA
+ggplot() +
+  geom_violin(df, mapping=aes(df$Zone, df$Hedges_SMD, fill=df$Zone, alpha=0.5)) +
+  geom_jitter(df, mapping=aes(df$Zone, df$Hedges_SMD),size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1])+
+  # scale_fill_manual(values=c("beige", "beige", "beige"), name="Zone") +
+  scale_fill_manual(values=c(cbPalette[8],cbPalette[3], cbPalette[4]), name="Zone") + #TO DO MANUAL: fill in colours for your factor levels
+
+#MODEL RESULTS
+  geom_point(data=d, mapping=aes(x=Zone, y=mean), size=4, shape=21, fill=cbPalette[5], colour=cbPalette[5]) +
+  guides(fill="none")+guides(alpha="none")+
+  geom_errorbar(data=d, mapping=aes(x=Zone, ymin=upper, ymax=lower), width=0.2, size=1.2, color=cbPalette[5]) +  #the estimates of the model + error bars
+  
+#FORMATTING
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("Zone")+#TO DO MANUAL
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+ geom_vline(xintercept=1.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+   geom_vline(xintercept=2.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+  
+  theme_classic()+
+  scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"), axis.text=element_text(size=rel(1.1))) +
+  annotate("text",  x = 0.5, y = -1.2, label = eqn, parse = TRUE, hjust = 0, vjust=0, size=8  )+
+  annotate("text",  x = 0.9, y = 2.2, label = eqn2, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 1.9, y = 2.2, label = eqn3, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 2.9, y = 2.2, label = eqn4, parse = TRUE, hjust = 0, size=8  )
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```
+##### PFprob
+```{r PFprob, echo=FALSE}
+
+ #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   PFprob  ,
+                       control=list(optimizer="optim", optmethod="BFGS"))
+model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt PFprob 
+# 0.5325743299 0.0003941625 
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+
+###### make predictions
+
+#for which x-values?
+PFprobmin<-min(df$PFprob, na.rm=T)
+PFprobmax<-max(df$PFprob, na.rm=T)
+PFprobmean<-mean(df$PFprob, na.rm=T)
+PFprobsd<-sd(df$PFprob, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(PFprobmin, PFprobmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.PFprob"="newmods")) 
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.2g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+ 
+   parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  
+  
+  
+ ######### FIGURE #######
+ # pdf("2023_04_Fig_PFprob.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=PFprob, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+ 
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+ 
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+  
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("Permafrost probability (%)")+#TO DO MANUAL: 
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = 0, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = PFprobmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+# dev.off()
+
+```
+
+
+####VEG
+##### NPP
+```{r NPP, echo=FALSE}
+
+ #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   NPP  ,
+                       control=list(optimizer="optim", optmethod="BFGS"))
+model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt NPP 
+# 0.5325743299 0.0003941625 
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+NPPmin<-min(df$NPP, na.rm=T)
+NPPmax<-max(df$NPP, na.rm=T)
+NPPmean<-mean(df$NPP, na.rm=T)
+NPPsd<-sd(df$NPP, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(NPPmin, NPPmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.NPP"="newmods")) 
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.2g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+  
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+ 
+  
+ parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+    
+  
+  
+  
+  
+ ######### FIGURE #######
+ # pdf("2023_04_Fig_NPP.pdf", width=10, height=10)
+
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=NPP, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+ 
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+ 
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+ #afgezet zodat het automatisch werkt voor alle trends (enkel aanpassen als je het beter wil maken)
+
+   # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("Net primary productivity (kg C m-2 year-2)")+#TO DO MANUAL: 
+
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = 0, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = NPPmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# dev.off()
+
+```
+
+
+
+
+
+
+
+
+##### Veg class
+
+```{r A Veg Class, echo=FALSE}
+
+
+ #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   Veg_Class  ,
+                       control=list(optimizer="optim", optmethod="BFGS"))
+model
+
+
+#ORDER OF FACTOR LEVELS IN MODEL
+contr.treatment(levels(df$Veg_Class)) 
+#   G P S W
+# B 0 0 0 0
+# G 1 0 0 0
+# P 0 1 0 0
+# S 0 0 1 0
+# W 0 0 0 1
+
+#COMPARE WITH ORDER IN DATA
+levels(df$Veg_Class)
+# if you need to reorder/rename:
+# levels(df$Veg_Class) <- c("Barren","Graminoid", "Prostrate", "Erect", "Wetland"))
+
+Qm<-model$QM
+p_value<-model$QMp
+N1<-length(which(df$Veg_Class=="Barren"))
+N2<-length(which(df$Veg_Class=="Graminoid"))
+N3<-length(which(df$Veg_Class=="Prostrate"))
+N4<-length(which(df$Veg_Class=="Erect"))
+N5<-length(which(df$Veg_Class=="Wetland"))
+
+#MODEL PREDICTIONS
+  Bmean<-RMAVEGCLASS$beta[[1]] #double brackets [[]] makes sure you don't get the name with it (Intercept)
+  Gmean<-RMAVEGCLASS$beta[[1]]+RMAVEGCLASS$beta[[2]]
+  Pmean<-RMAVEGCLASS$beta[[1]]+RMAVEGCLASS$beta[[3]]
+  Smean<-RMAVEGCLASS$beta[[1]]+RMAVEGCLASS$beta[[4]]
+  Wmean<-RMAVEGCLASS$beta[[1]]+RMAVEGCLASS$beta[[5]] 
+
+
+  # standard errors Cont = sterr of intercept, sterr Discont, P : you need the vcov matrix for this
+  # summary(RMAVEGCLASS)
+  # vcov(RMAVEGCLASS)
+  vc_cov<-vcov(RMAVEGCLASS)
+
+  Bse<-RMAVEGCLASS$se[[1]]
+  Gse<-sqrt(vc_cov[1,1]+vc_cov[2,2]+2*vc_cov[1,2]) #standard error of G
+  Pse<-sqrt(vc_cov[1,1]+vc_cov[3,3]+2*vc_cov[1,3])
+  Sse<-sqrt(vc_cov[1,1]+vc_cov[4,4]+2*vc_cov[1,4])
+  Wse<-sqrt(vc_cov[1,1]+vc_cov[5,5]+2*vc_cov[1,5])
+
+
+  # 95%CI calculation: mean +/- 1.96*SE
+  Blower<-Bmean-1.96*Bse
+  Bupper<-Bmean+1.96*Bse
+  Glower<-Gmean-1.96*Gse
+  Gupper<-Gmean+1.96*Gse
+  Plower<-Pmean-1.96*Pse
+  Pupper<-Pmean+1.96*Pse
+  Slower<-Smean-1.96*Sse
+  Supper<-Smean+1.96*Sse
+  Wlower<-Wmean-1.96*Wse
+  Wupper<-Wmean+1.96*Wse
+
+  # Plotting mean with standard errors (confidence intervals): store them in dfs
+  d=data.frame(Veg_Class=c("Barren","Graminoid", "Prostrate", "Erect", "Wetland"),
+               mean=c(Bmean, Gmean , Pmean, Smean, Wmean),
+               lower=c(Blower, Glower, Plower, Slower, Wlower),
+               upper=c(Bupper,Gupper, Pupper, Supper, Wupper))
+
+  # Put full names in the SMD df to get them to link model output classes with the actual data classes
+ levels(df$Veg_Class) <- c("Barren","Graminoid", "Prostrate", "Erect", "Wetland")
+
+ 
+ #colourblind friendly figures
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+ 
+ 
+#Model output to add to the figure as label (only Qm and p-value here)
+  eqn <- sprintf(
+    "italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.2g",
+    Qm,
+    p_value
+  )
+ 
+  
+ 
+   parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+  
+  
+  
+  
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N1
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  eqn3 <- sprintf(
+    "italic(N) == %.0f",
+   N2
+  )
+  
+  parse(text = eqn3)
+  eqn3
+  
+  
+  
+  
+  eqn4<- sprintf(
+    "italic(N) == %.0f",
+   N3
+  )
+  
+  parse(text = eqn4)
+  eqn4
+  
+  
+  
+   eqn5<- sprintf(
+    "italic(N) == %.0f",
+   N4
+  )
+  
+  parse(text = eqn5)
+  eqn5
+  
+  
+  
+  
+   eqn6<- sprintf(
+    "italic(N) == %.0f",
+   N5
+  )
+  
+  parse(text = eqn6)
+  eqn6
+  
+ 
+  
+################
+ pdf("Ext_Fig_2_d_raw.pdf", width=14, height=10)
+
+#ACTUAL DATA
+ggplot() +
+  geom_violin(df, mapping=aes(df$Veg_Class, df$Hedges_SMD, fill=df$Veg_Class, alpha=0.5)) +
+  geom_jitter(df, mapping=aes(df$Veg_Class, df$Hedges_SMD),size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1])+
+  # scale_fill_manual(values=c("beige", "beige", "beige"), name="Veg_Class") +
+  scale_fill_manual(values=c(cbPalette[8],cbPalette[3], cbPalette[4],cbPalette[7],cbPalette[6]), name="Veg_Class") + #TO DO MANUAL
+
+#MODEL RESULTS
+  geom_point(data=d, mapping=aes(x=Veg_Class, y=mean), size=4, shape=21, fill=cbPalette[5], colour=cbPalette[5]) +
+  guides(fill="none")+guides(alpha="none")+
+  geom_errorbar(data=d, mapping=aes(x=Veg_Class, ymin=upper, ymax=lower), width=0.2, size=1.2, color=cbPalette[5]) +  #the estimates of the model + error bars
+  
+#FORMATTING
+  # ggtitle("Veg_Class (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("Veg_Class")+#TO DO MANUAL
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+  geom_vline(xintercept=1.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+   geom_vline(xintercept=2.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+   geom_vline(xintercept=3.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+   geom_vline(xintercept=4.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+
+  theme_classic()+
+  scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"), axis.text=element_text(size=rel(1.1))) +
+  annotate("text",  x = 0.5, y = -1.2, label = eqn, parse = TRUE, hjust = 0, vjust=0, size=8  )+
+  annotate("text",  x = 0.9, y = 2.2, label = eqn2, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 1.9, y = 2.2, label = eqn3, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 2.9, y = 2.2, label = eqn4, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 3.9, y = 2.2, label = eqn5, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 4.9, y = 2.2, label = eqn6, parse = TRUE, hjust = 0, size=8  )
+
+
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+####SOIL
+
+###### Soil_Moist_CAT
+```{r Soil_Moist_CAT}
+
+
+ #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   Soil_Moist_CAT  ,
+                       control=list(optimizer="optim", optmethod="BFGS"))
+model
+
+
+#ORDER OF FACTOR LEVELS IN MODEL
+contr.treatment(levels(df$Soil_Moist_CAT)) 
+#       mesic wet
+# dry       0   0
+# mesic     1   0
+# wet       0   1
+
+#COMPARE WITH ORDER IN DATA
+levels(df$Soil_Moist_CAT)
+# see also section "reorder" above" - make sure the naming is also the same! so here removed 'subarctic'
+levels(df$Soil_Moist_CAT) <- c("Dry", "Mesic", "Wet")
+
+
+Qm<-model$QM
+p_value<-model$QMp
+N1<-length(which(df$Soil_Moist_CAT=="Dry"))
+N2<-length(which(df$Soil_Moist_CAT=="Mesic"))
+N3<-length(which(df$Soil_Moist_CAT=="Wet"))
+
+#MODEL PREDICTIONS
+Drymean<-model$beta[[1]] #double brackets [[]] makes sure you don't get the name with it (Intercept)
+Mesicmean<-model$beta[[1]]+model$beta[[2]]
+Wetmean <-model$beta[[1]]+model$beta[[3]]
+#TO DO MANUAL
+
+# standard errors Cont = sterr of intercept, sterr Discont, Mesic : you need the vcov matrix for this
+# summary(model)
+# vcov(model)
+vc_cov<-vcov(model)
+
+Dryse <-model$se[[1]]
+Mesicse<-sqrt(vc_cov[1,1]+vc_cov[2,2]+2*vc_cov[1,2])
+Wetse<-sqrt(vc_cov[1,1]+vc_cov[3,3]+2*vc_cov[1,3]) #standard error of Wet
+#TO DO MANUAL
+
+# 95%CI calculation: mean +/- 1.96*SE
+Drylower<-Drymean-1.96*Dryse
+Dryupper<-Drymean+1.96*Dryse
+Mesiclower<-Mesicmean-1.96*Mesicse
+Mesicupper<-Mesicmean+1.96*Mesicse
+Wetlower<-Wetmean-1.96*Wetse
+Wetupper<-Wetmean+1.96*Wetse
+#TO DO MANUAL
+
+# Plotting mean with standard errors (confidence intervals): store them in dfs
+ d=data.frame(Soil_Moist_CAT=c("Dry", "Mesic","Wet"),
+           mean=c(Drymean,Mesicmean, Wetmean ),
+             lower=c( Drylower,Mesiclower,Wetlower),
+            upper=c( Dryupper,Mesicupper,Wetupper))
+#TO DO MANUAL
+
+ 
+ #colourblind friendly figures
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+ 
+ 
+#Model output to add to the figure as label (only Qm and p-value here)
+  eqn <- sprintf(
+    "italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.2g",
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R² BEHIND, NOW ADDED QM INSTEAD
+  
+ 
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N1
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  eqn3 <- sprintf(
+    "italic(N) == %.0f",
+   N2
+  )
+  
+  parse(text = eqn3)
+  eqn3
+  
+  
+  
+  
+  
+  eqn4 <- sprintf(
+    "italic(N) == %.0f",
+   N3
+  )
+  
+  parse(text = eqn4)
+  eqn4
+  
+  
+################
+ pdf("Ext_Fig_2_b_raw.pdf", width=14, height=10)
+
+#ACTUAL DATA
+ggplot() +
+  geom_violin(df, mapping=aes(df$Soil_Moist_CAT, df$Hedges_SMD, fill=df$Soil_Moist_CAT, alpha=0.5)) +
+  geom_jitter(df, mapping=aes(df$Soil_Moist_CAT, df$Hedges_SMD),size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1])+
+  # scale_fill_manual(values=c("beige", "beige", "beige"), name="Soil_Moist_CAT") +
+  scale_fill_manual(values=c(cbPalette[8],cbPalette[3], cbPalette[4]), name="Soil_Moist_CAT") + #TO DO MANUAL: fill in colours for your factor levels
+
+#MODEL RESULTS
+  geom_point(data=d, mapping=aes(x=Soil_Moist_CAT, y=mean), size=4, shape=21, fill=cbPalette[5], colour=cbPalette[5]) +
+  guides(fill="none")+guides(alpha="none")+
+  geom_errorbar(data=d, mapping=aes(x=Soil_Moist_CAT, ymin=upper, ymax=lower), width=0.2, size=1.2, color=cbPalette[5]) +  #the estimates of the model + error bars
+  
+#FORMATTING
+  # ggtitle("Soil_Moist_CAT (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("Soil_Moist_CAT")+#TO DO MANUAL
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+ geom_vline(xintercept=1.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+   geom_vline(xintercept=2.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+  
+  theme_classic()+
+  scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"), axis.text=element_text(size=rel(1.1))) +
+  annotate("text",  x = 0.5, y = -1.2, label = eqn, parse = TRUE, hjust = 0, vjust=0, size=8  )+
+  annotate("text",  x = 0.9, y = 2.2, label = eqn2, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 1.9, y = 2.2, label = eqn3, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 2.9, y = 2.2, label = eqn4, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```
+
+
+###### pH_Class
+```{r pH}
+
+
+ #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   pH_Class  ,
+                       control=list(optimizer="optim", optmethod="BFGS"))
+model
+
+
+#ORDER OF FACTOR LEVELS IN MODEL
+contr.treatment(levels(df$pH_Class)) 
+#      Medium High
+# Low         0    0
+# Medium      1    0
+# High        0    1
+
+#COMPARE WITH ORDER IN DATA
+levels(df$pH_Class)
+# see also section "reorder" above" - make sure the naming is also the same! so here removed 'subarctic'
+levels(df$pH_Class) <- c("Low", "Medium", "High")
+
+
+Qm<-model$QM
+p_value<-model$QMp
+N1<-length(which(df$pH_Class=="Low"))
+N2<-length(which(df$pH_Class=="Medium"))
+N3<-length(which(df$pH_Class=="High"))
+
+
+#MODEL PREDICTIONS
+Lowmean<-model$beta[[1]] #double brackets [[]] makes sure you don't get the name with it (Intercept)
+Mediummean<-model$beta[[1]]+model$beta[[2]]
+Highmean <-model$beta[[1]]+model$beta[[3]]
+#TO DO MANUAL
+
+# standard errors Cont = sterr of intercept, sterr Discont, Medium : you need the vcov matrix for this
+# summary(model)
+# vcov(model)
+vc_cov<-vcov(model)
+
+Lowse <-model$se[[1]]
+Mediumse<-sqrt(vc_cov[1,1]+vc_cov[2,2]+2*vc_cov[1,2])
+Highse<-sqrt(vc_cov[1,1]+vc_cov[3,3]+2*vc_cov[1,3]) #standard error of High
+#TO DO MANUAL
+
+# 95%CI calculation: mean +/- 1.96*SE
+Lowlower<-Lowmean-1.96*Lowse
+Lowupper<-Lowmean+1.96*Lowse
+Mediumlower<-Mediummean-1.96*Mediumse
+Mediumupper<-Mediummean+1.96*Mediumse
+Highlower<-Highmean-1.96*Highse
+Highupper<-Highmean+1.96*Highse
+#TO DO MANUAL
+
+# Plotting mean with standard errors (confidence intervals): store them in dfs
+ d=data.frame(pH=c("Low", "Medium","High"),
+           mean=c(Lowmean,Mediummean, Highmean ),
+             lower=c( Lowlower,Mediumlower,Highlower),
+            upper=c( Lowupper,Mediumupper,Highupper))
+#TO DO MANUAL
+
+ 
+ #colourblind friendly figures
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+ 
+ 
+#Model output to add to the figure as label (only Qm and p-value here)
+  eqn <- sprintf(
+    "italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.2g",
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R² BEHIND, NOW ADDED QM INSTEAD
+  
+ 
+   parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+  
+  
+  
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N1
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  eqn3 <- sprintf(
+    "italic(N) == %.0f",
+   N2
+  )
+  
+  parse(text = eqn3)
+  eqn3
+  
+  
+  
+  
+  
+  eqn4 <- sprintf(
+    "italic(N) == %.0f",
+   N3
+  )
+  
+  parse(text = eqn4)
+  eqn4
+  
+ 
+  
+################
+ pdf("Ext_Fig_2_c_raw.pdf", width=14, height=10)
+
+#ACTUAL DATA
+ggplot() +
+  geom_violin(df, mapping=aes(df$pH_Class, df$Hedges_SMD, fill=df$pH_Class, alpha=0.5)) +
+  geom_jitter(df, mapping=aes(df$pH_Class, df$Hedges_SMD),size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1])+
+  # scale_fill_manual(values=c("beige", "beige", "beige"), name="pH") +
+  scale_fill_manual(values=c(cbPalette[8],cbPalette[3], cbPalette[4]), name="pH") + #TO DO MANUAL: fill in colours for your factor levels
+
+#MODEL RESULTS
+  geom_point(data=d, mapping=aes(x=pH, y=mean), size=4, shape=21, fill=cbPalette[5], colour=cbPalette[5]) +
+  guides(fill="none")+guides(alpha="none")+
+  geom_errorbar(data=d, mapping=aes(x=pH, ymin=upper, ymax=lower), width=0.2, size=1.2, color=cbPalette[5]) +  #the estimates of the model + error bars
+  
+#FORMATTING
+  # ggtitle("pH (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("pH")+#TO DO MANUAL
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+ geom_vline(xintercept=1.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+   geom_vline(xintercept=2.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+  
+  theme_classic()+
+  scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"), axis.text=element_text(size=rel(1.1))) +
+  annotate("text",  x = 0.5, y = -1.2, label = eqn, parse = TRUE, hjust = 0, vjust=0, size=8  )+
+  annotate("text",  x = 0.9, y = 2.2, label = eqn2, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 1.9, y = 2.2, label = eqn3, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 2.9, y = 2.2, label = eqn4, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+
+
+```
+##### Soil_C_stock
+```{r Soil_C_stock, echo=FALSE}
+
+ #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   Soil_C_stock  ,
+                       control=list(optimizer="optim", optmethod="BFGS"))
+model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt Soil_C_stock 
+# 0.5325743299 0.0003941625 
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+Soil_C_stockmin<-min(df$Soil_C_stock, na.rm=T)
+Soil_C_stockmax<-max(df$Soil_C_stock, na.rm=T)
+Soil_C_stockmean<-mean(df$Soil_C_stock, na.rm=T)
+Soil_C_stocksd<-sd(df$Soil_C_stock, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(Soil_C_stockmin, Soil_C_stockmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.Soil_C_stock"="newmods")) 
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.2g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  
+  
+  
+  
+ ######### FIGURE #######
+ # pdf("2023_04_Fig_Soil_C_stock.pdf", width=10, height=10)
+
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=Soil_C_stock, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+ 
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+ 
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+ #afgezet zodat het automatisch werkt voor alle trends (enkel aanpassen als je het beter wil maken)
+
+  
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("Soil C stock (tons/ha)")+#TO DO MANUAL: 
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = 0, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+
+  annotate("text",  x = 0, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# dev.off()
+
+```
+
+
+
+##### CN_Min_CTL
+```{r CN_Min_CTL, echo=FALSE}
+# df #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   CN_Min_CTL  )
+# model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt CN_Min_CTL 
+# 0.5325743299 0.0003941625 
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+CN_Min_CTLmin<-min(df$CN_Min_CTL, na.rm=T)
+CN_Min_CTLmax<-max(df$CN_Min_CTL, na.rm=T)
+CN_Min_CTLmean<-mean(df$CN_Min_CTL, na.rm=T)
+CN_Min_CTLsd<-sd(df$CN_Min_CTL, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(CN_Min_CTLmin, CN_Min_CTLmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.CN_Min_CTL"="newmods")) 
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  
+  
+ ######### FIGURE #######
+ pdf("Fig_5_b_raw.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=CN_Min_CTL, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+ 
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+ 
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+  
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("CN-ratio Mineral layer CTL")+#TO DO MANUAL: 
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+  # geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = CN_Min_CTLmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+ 
+annotate("text",  x = CN_Min_CTLmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```
+
+
+##### SON_Min_CTL
+```{r SON_Min_CTL, echo=FALSE}
+# df #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   SON_Min_CTL  )
+# model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt SON_Min_CTL 
+# 0.5325743299 0.0003941625 
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+SON_Min_CTLmin<-min(df$SON_Min_CTL, na.rm=T)
+SON_Min_CTLmax<-max(df$SON_Min_CTL, na.rm=T)
+SON_Min_CTLmean<-mean(df$SON_Min_CTL, na.rm=T)
+SON_Min_CTLsd<-sd(df$SON_Min_CTL, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(SON_Min_CTLmin, SON_Min_CTLmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.SON_Min_CTL"="newmods")) 
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+  
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+  
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+  
+  parse(text = eqn2)
+  eqn2
+  
+  
+  
+  
+  
+  
+ ######### FIGURE #######
+ pdf("Fig_5_a_raw.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=SON_Min_CTL, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+ 
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+ 
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+  
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("TN Mineral layer CTL (%)")+#TO DO MANUAL: 
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+  # geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = SON_Min_CTLmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+ 
+annotate("text",  x = SON_Min_CTLmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```
+
+
+

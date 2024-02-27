@@ -1,0 +1,162 @@
+---
+title: "effect size response"
+output:
+  html_document:
+    df_print: paged
+editor_options: 
+  chunk_output_type: inline
+---
+
+#load data
+```{r load data, include=FALSE}
+library("ggplot2")
+library("plyr")
+library("dplyr")
+library("car")
+library("tidyr")
+library("readxl")
+library("reshape2")
+library("tidyverse")
+library("ggrepel")
+library("tibble")
+library("ggforce")
+library("lubridate")
+library("esc")
+library("effsize")
+library("metafor")
+library("corrplot")
+library("MASS")
+library("meta")
+library("metafor")
+library("installr")
+library("crayon")
+library("stringr")
+library("tibble")
+
+DS_final<-read.csv("df_1.csv")
+DS_final<-DS_final[,-c(1)]
+
+```
+
+
+#effect sizes
+```{r data prep, echo=FALSE}
+dfSummary<-DS_final %>% group_by(Dataset_ID, Treatment) %>% summarize(MEAN=mean(gC_CO2), SDEV=sd(gC_CO2), SS=n())
+
+dfSummaryCTL <- dfSummary  %>% dplyr::filter(Treatment=="CTL")
+dfSummaryOTC <- dfSummary  %>% dplyr::filter(Treatment=="OTC")
+dfSummary <- full_join(dfSummaryCTL, dfSummaryOTC, by="Dataset_ID")
+
+dfSummary<-plyr::rename(dfSummary,c("MEAN.x"="MEAN_CTL"))
+dfSummary<-plyr::rename(dfSummary,c("MEAN.y"="MEAN_OTC"))
+dfSummary<-plyr::rename(dfSummary,c("SDEV.x"="SDEV_CTL"))
+dfSummary<-plyr::rename(dfSummary,c("SDEV.y"="SDEV_OTC"))
+dfSummary<-plyr::rename(dfSummary,c("SS.x"="SS_CTL"))
+dfSummary<-plyr::rename(dfSummary,c("SS.y"="SS_OTC"))
+
+```
+
+##Hedges SMD
+```{r Hedges SMD, warning=FALSE, echo=FALSE,message=FALSE}
+
+SMD <-
+  escalc("SMD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummary 
+  )
+
+SMD<-plyr::rename(SMD,c("yi"="Hedges_SMD"))
+SMD<-plyr::rename(SMD,c("vi"="Hedges_SMD_VARIANCE"))
+
+Mean_SMD<-mean(SMD$Hedges_SMD)
+# Mean_SMD
+
+```
+
+##raw mean diff
+```{r raw mean diff, echo=FALSE}
+############# Raw MD ############# 
+MD <-
+  escalc("MD", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummary 
+  )
+
+MD<-plyr::rename(MD,c("yi"="raw_MD"))
+MD<-plyr::rename(MD,c("vi"="raw_MD_VARIANCE"))
+
+Mean_MD<-mean(MD$raw_MD)
+# Mean_MD
+
+
+```
+
+##ratio of means 
+```{r ROM, echo=FALSE}
+############# Log Response Ratio ROM ############# 
+
+ROM <-
+  escalc("ROM", m1i = MEAN_OTC,
+    n1i = SS_OTC,
+    sd1i = SDEV_OTC,
+    m2i = MEAN_CTL,
+    n2i = SS_CTL,
+    sd2i = SDEV_CTL,
+    data = dfSummary 
+  )
+
+ROM<-plyr::rename(ROM,c("yi"="ROM"))
+ROM<-plyr::rename(ROM,c("vi"="ROM_VARIANCE"))
+
+Mean_RR<-mean(ROM$ROM)
+# Mean_RR
+```
+
+```{r summary, echo=FALSE}
+dfSummary<-full_join(SMD, MD, by=c("Dataset_ID", "Treatment.x", "Treatment.y"))
+dfSummary<-full_join(dfSummary, ROM, by=c("Dataset_ID", "Treatment.x", "Treatment.y"))
+
+dfSummary<-plyr::rename(dfSummary,c("MEAN_CTL.x"="MEAN_CTL"))
+dfSummary<-plyr::rename(dfSummary,c("MEAN_OTC.x"="MEAN_OTC"))
+dfSummary<-plyr::rename(dfSummary,c("SDEV_CTL.x"="SDEV_CTL"))
+dfSummary<-plyr::rename(dfSummary,c("SDEV_OTC.x"="SDEV_OTC"))
+dfSummary<-plyr::rename(dfSummary,c("SS_CTL.x"="SS_CTL"))
+dfSummary<-plyr::rename(dfSummary,c("SS_OTC.x"="SS_OTC"))
+dfSummary<-dfSummary[,-c(12:17, 20:25)]
+
+SMD$CI_lb<-SMD$Hedges_SMD-1.96*sqrt(SMD$Hedges_SMD_VARIANCE)
+SMD$CI_ub<-SMD$Hedges_SMD+1.96*sqrt(SMD$Hedges_SMD_VARIANCE)
+
+MD$CI_lb<-MD$raw_MD-1.96*sqrt(MD$raw_MD_VARIANCE)
+MD$CI_ub<-MD$raw_MD+1.96*sqrt(MD$raw_MD_VARIANCE)
+
+ROM$CI_lb<-ROM$ROM-1.96*sqrt(ROM$ROM_VARIANCE)
+ROM$CI_ub<-ROM$ROM+1.96*sqrt(ROM$ROM_VARIANCE)
+
+dfSummary$Hedges_SMD_CI_lb<-SMD$Hedges_SMD-1.96*sqrt(SMD$Hedges_SMD_VARIANCE)
+dfSummary$Hedges_SMD_CI_ub<-SMD$Hedges_SMD+1.96*sqrt(SMD$Hedges_SMD_VARIANCE)
+
+dfSummary$raw_MD_CI_lb<-MD$raw_MD-1.96*sqrt(MD$raw_MD_VARIANCE)
+dfSummary$raw_MD_CI_ub<-MD$raw_MD+1.96*sqrt(MD$raw_MD_VARIANCE)
+
+dfSummary$ROM_CI_lb<-ROM$ROM-1.96*sqrt(ROM$ROM_VARIANCE)
+dfSummary$ROM_CI_ub<-ROM$ROM+1.96*sqrt(ROM$ROM_VARIANCE)
+
+dfSummary<-dfSummary %>% relocate(Hedges_SMD_CI_lb, .after = Hedges_SMD_VARIANCE)
+dfSummary<-dfSummary %>% relocate(Hedges_SMD_CI_ub, .after = Hedges_SMD_CI_lb)
+dfSummary<-dfSummary %>% relocate(raw_MD_CI_lb, .after = raw_MD_VARIANCE)
+dfSummary<-dfSummary %>% relocate(raw_MD_CI_ub, .after = raw_MD_CI_lb)
+dfSummary<-dfSummary %>% relocate(ROM_CI_lb, .after = ROM_VARIANCE)
+dfSummary<-dfSummary %>% relocate(ROM_CI_ub, .after = ROM_CI_lb)
+
+write.csv(dfSummary, "dfSummary.csv")
+```
+

@@ -1,0 +1,958 @@
+---
+title: "meta-regression_veg"
+output:
+  html_document:
+    df_print: paged
+editor_options: 
+  chunk_output_type: inline
+---
+
+#load data
+```{r load data, include=FALSE}
+library("ggplot2")
+library("plyr")
+library("dplyr")
+library("car")
+library("tidyr")
+library("readxl")
+library("reshape2")
+library("tidyverse")
+library("ggrepel")
+library("tibble")
+library("ggforce")
+library("lubridate")
+library("esc")
+library("effsize")
+library("nlme") 
+library("metafor")
+library("corrplot")
+
+df<-read.csv("df_2.csv")
+df_Graminoids<-read.csv("SMDGraminoids.csv")
+df_Forbs<-read.csv("SMDForbs.csv")
+df_Decid_Shrubs<-read.csv("SMDDecid_Shrubs.csv")
+df_Evergr_Shrubs<-read.csv("SMDEvergr_Shrubs.csv")
+df_Mosses<-read.csv("SMDMosses.csv")
+df_Lichens<-read.csv("SMDLichens.csv")
+df_BM<-read.csv("SMDBM.csv")
+df_Mean_H<-read.csv("SMDMean_H.csv")
+
+
+#rename + change data type
+df<-plyr::rename(df,c("ï..Dataset_ID"="Dataset_ID"))
+df$Exp_ID<-as.factor(df$Exp_ID)
+df$Site<-as.factor(df$Site)
+df$Location<-as.factor(df$Location)
+df$Country<-as.factor(df$Country)
+
+df_Graminoids<-plyr::rename(df_Graminoids,c("X"="Observation_ID"))
+df_Graminoids$Dataset_ID<-as.factor(df_Graminoids$Dataset_ID)
+
+df_Forbs<-plyr::rename(df_Forbs,c("X"="Observation_ID"))
+df_Forbs$Dataset_ID<-as.factor(df_Forbs$Dataset_ID)
+
+df_Decid_Shrubs<-plyr::rename(df_Decid_Shrubs,c("X"="Observation_ID"))
+df_Decid_Shrubs$Dataset_ID<-as.factor(df_Decid_Shrubs$Dataset_ID)
+
+df_Evergr_Shrubs<-plyr::rename(df_Evergr_Shrubs,c("X"="Observation_ID"))
+df_Evergr_Shrubs$Dataset_ID<-as.factor(df_Evergr_Shrubs$Dataset_ID)
+
+df_Mosses<-plyr::rename(df_Mosses,c("X"="Observation_ID"))
+df_Mosses$Dataset_ID<-as.factor(df_Mosses$Dataset_ID)
+
+df_Lichens<-plyr::rename(df_Lichens,c("X"="Observation_ID"))
+df_Lichens$Dataset_ID<-as.factor(df_Lichens$Dataset_ID)
+
+df_BM<-plyr::rename(df_BM,c("X"="Observation_ID"))
+df_BM$Dataset_ID<-as.factor(df_BM$Dataset_ID)
+
+df_Mean_H<-plyr::rename(df_Mean_H,c("X"="Observation_ID"))
+df_Mean_H$Dataset_ID<-as.factor(df_Mean_H$Dataset_ID)
+
+```
+
+#data check
+##numbers
+```{r data check, echo=FALSE}
+# df$SMD_Graminoids[!is.na(df$Graminoids)]
+# df$SMD_Forbs[!is.na(df$SMD_Forbs)]
+# df$SMD_Decid_Shrubs[!is.na(df$SMD_Decid_Shrubs)]
+# df$SMD_Evergr_Shrubs[!is.na(df$SMD_Evergr_Shrubs)]
+# df$SMD_Mosses[!is.na(df$SMD_Mosses)]
+# df$SMD_Lichens[!is.na(df$SMD_Lichens)]
+# df$SMD_BM[!is.na(df$SMD_BM)]
+# df$SMD_Mean_H[!is.na(df$SMD_Mean_H)]
+```
+
+##distribution
+```{r B Distribution: histograms, echo=FALSE}
+tempGraminoids<-df[-which(is.na(df$SMD_Graminoids)),]
+hist(tempGraminoids$SMD_Graminoids, xlab="SMD_Graminoids", ylab="Nr of Datasets", xlim=c(min(tempGraminoids$SMD_Graminoids)-2,max(tempGraminoids$SMD_Graminoids)+2))
+
+tempForbs<-df[-which(is.na(df$SMD_Forbs)),]
+hist(tempForbs$SMD_Forbs, xlab="SMD_Forbs", ylab="Nr of Datasets", xlim=c(min(tempForbs$SMD_Forbs)-2,max(tempForbs$SMD_Forbs)+2))
+
+tempDecid_Shrubs<-df[-which(is.na(df$SMD_Decid_Shrubs)),]
+hist(tempDecid_Shrubs$SMD_Decid_Shrubs, xlab="SMD_Decid_Shrubs", ylab="Nr of Datasets", xlim=c(min(tempDecid_Shrubs$SMD_Decid_Shrubs)-2,max(tempDecid_Shrubs$SMD_Decid_Shrubs)+2))
+
+tempEvergr_Shrubs<-df[-which(is.na(df$SMD_Evergr_Shrubs)),]
+hist(tempEvergr_Shrubs$SMD_Evergr_Shrubs, xlab="SMD_Evergr_Shrubs", ylab="Nr of Datasets", xlim=c(min(tempEvergr_Shrubs$SMD_Evergr_Shrubs)-2,max(tempEvergr_Shrubs$SMD_Evergr_Shrubs)+2))
+
+tempMosses<-df[-which(is.na(df$SMD_Mosses)),]
+hist(tempMosses$SMD_Mosses, xlab="SMD_Mosses", ylab="Nr of Datasets", xlim=c(min(tempMosses$SMD_Mosses)-2,max(tempMosses$SMD_Mosses)+2))
+
+tempLichens<-df[-which(is.na(df$SMD_Lichens)),]
+hist(tempLichens$SMD_Lichens, xlab="SMD_Lichens", ylab="Nr of Datasets", xlim=c(min(tempLichens$SMD_Lichens)-2,max(tempLichens$SMD_Lichens)+2))
+
+tempBM<-df[-which(is.na(df$SMD_BM)),]
+hist(tempBM$SMD_BM, xlab="SMD_BM", ylab="Nr of Datasets", xlim=c(min(tempBM$SMD_BM)-2,max(tempBM$SMD_BM)+2))
+
+tempMean_H<-df[-which(is.na(df$SMD_Mean_H)),]
+hist(tempMean_H$SMD_Mean_H, xlab="SMD_Mean_H", ylab="Nr of Datasets", xlim=c(min(tempMean_H$SMD_Mean_H)-2,max(tempMean_H$SMD_Mean_H)+2))
+
+```
+
+##correlation
+
+```{r B Collinearity, echo=FALSE}
+
+dfcor<-df[ , which(names(df) %in% c("SMD_Lichens", "SMD_Forbs", "SMD_Decid_Shrubs", "SMD_Evergr_Shrubs", "SMD_Mosses", "SMD_Lichens", "SMD_BM", "SMD_Mean_H"))]
+cor<- cor(dfcor, use="pairwise.complete.obs")
+cor
+
+dfcor2<-df[ , which(names(df) %in% c("Hedges_SMD","SMD_Lichens", "SMD_Forbs", "SMD_Decid_Shrubs", "SMD_Evergr_Shrubs", "SMD_Mosses", "SMD_Lichens", "SMD_BM", "SMD_Mean_H"))] 
+cor2 <- cor(dfcor2, use="pairwise.complete.obs")
+cor2
+
+par(mfrow=c(1,2))
+corrplot.mixed(cor, main="Continuous drivers") 
+corrplot.mixed(cor2, tl.cex=0.7, main="Continuous drivers and response")
+```
+
+
+##effect of OTC
+### Graminoids
+```{r Graminoids, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Graminoids <- df_Graminoids %>% inner_join(dfsub, by="Dataset_ID")
+df_Graminoids<- df_Graminoids %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDGraminoids, Hedges_SMDGraminoids_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Graminoids)
+summary(model1)
+```
+
+
+
+### Forbs
+```{r Forbs, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Forbs <- df_Forbs %>% inner_join(dfsub, by="Dataset_ID")
+df_Forbs<- df_Forbs %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model2 <- rma.mv(Hedges_SMDForbs, Hedges_SMDForbs_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Forbs)
+summary(model2)
+```
+
+
+
+### Decid_Shrubs
+```{r Decid_Shrubs, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Decid_Shrubs <- df_Decid_Shrubs %>% inner_join(dfsub, by="Dataset_ID")
+df_Decid_Shrubs<- df_Decid_Shrubs %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model3 <- rma.mv(Hedges_SMDDecid_Shrubs, Hedges_SMDDecid_Shrubs_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Decid_Shrubs)
+summary(model3)
+```
+
+
+
+### Evergr_Shrubs
+```{r Evergr_Shrubs, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Evergr_Shrubs <- df_Evergr_Shrubs %>% inner_join(dfsub, by="Dataset_ID")
+df_Evergr_Shrubs<- df_Evergr_Shrubs %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model4 <- rma.mv(Hedges_SMDEvergr_Shrubs, Hedges_SMDEvergr_Shrubs_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Evergr_Shrubs)
+summary(model4)
+```
+
+
+
+### Mosses
+```{r Mosses, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Mosses <- df_Mosses %>% inner_join(dfsub, by="Dataset_ID")
+df_Mosses<- df_Mosses %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model5 <- rma.mv(Hedges_SMDMosses, Hedges_SMDMosses_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Mosses)
+summary(model5)
+```
+
+
+
+### Lichens
+```{r Lichens, echo=FALSE}
+# link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Lichens <- df_Lichens %>% inner_join(dfsub, by="Dataset_ID")
+df_Lichens<- df_Lichens %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model6 <- rma.mv(Hedges_SMDLichens, Hedges_SMDLichens_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Lichens)
+summary(model6)
+```
+
+
+
+### BM
+```{r BM, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_BM <- df_BM %>% inner_join(dfsub, by="Dataset_ID")
+df_BM<- df_BM %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model7 <- rma.mv(Hedges_SMDBM, Hedges_SMDBM_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_BM)
+summary(model7)
+```
+
+
+
+### Mean_H
+```{r Mean_H, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Mean_H <- df_Mean_H %>% inner_join(dfsub, by="Dataset_ID")
+df_Mean_H<- df_Mean_H %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model8 <- rma.mv(Hedges_SMDMean_H, Hedges_SMDMean_H_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Mean_H)
+summary(model8)
+```
+
+###calculate I²
+```{r}
+# https://www.metafor-project.org/doku.php/tips:i2_multilevel_multivariate#multilevel_models
+# MULTILEVEL MODELS
+
+
+#### model1 ####
+W <- diag(1/model1$vi)
+X <- model.matrix(model1)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model1$sigma2) / (sum(model1$sigma2) + (model1$k-model1$p)/sum(diag(P)))
+100 * model1$sigma2 / (sum(model1$sigma2) + (model1$k-model1$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+
+
+#### model2 ####
+W <- diag(1/model2$vi)
+X <- model.matrix(model2)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model2$sigma2) / (sum(model2$sigma2) + (model2$k-model2$p)/sum(diag(P)))
+100 * model2$sigma2 / (sum(model2$sigma2) + (model2$k-model2$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+
+#### model3 ####
+W <- diag(1/model3$vi)
+X <- model.matrix(model3)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model3$sigma2) / (sum(model3$sigma2) + (model3$k-model3$p)/sum(diag(P)))
+100 * model3$sigma2 / (sum(model3$sigma2) + (model3$k-model3$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+
+
+#### model4 ####
+W <- diag(1/model4$vi)
+X <- model.matrix(model4)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model4$sigma2) / (sum(model4$sigma2) + (model4$k-model4$p)/sum(diag(P)))
+100 * model4$sigma2 / (sum(model4$sigma2) + (model4$k-model4$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+
+
+#### model5 ####
+W <- diag(1/model5$vi)
+X <- model.matrix(model5)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model5$sigma2) / (sum(model5$sigma2) + (model5$k-model5$p)/sum(diag(P)))
+100 * model5$sigma2 / (sum(model5$sigma2) + (model5$k-model5$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+
+
+#### model6 ####
+W <- diag(1/model6$vi)
+X <- model.matrix(model6)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model6$sigma2) / (sum(model6$sigma2) + (model6$k-model6$p)/sum(diag(P)))
+100 * model6$sigma2 / (sum(model6$sigma2) + (model6$k-model6$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+
+
+#### model7 ####
+W <- diag(1/model7$vi)
+X <- model.matrix(model7)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model7$sigma2) / (sum(model7$sigma2) + (model7$k-model7$p)/sum(diag(P)))
+100 * model7$sigma2 / (sum(model7$sigma2) + (model7$k-model7$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+
+#### model8 ####
+W <- diag(1/model8$vi)
+X <- model.matrix(model8)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model8$sigma2) / (sum(model8$sigma2) + (model8$k-model8$p)/sum(diag(P)))
+100 * model8$sigma2 / (sum(model8$sigma2) + (model8$k-model8$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+
+```
+
+
+#metaregression
+##model output
+```{r single models, echo=FALSE}
+
+RMAGRAMINOIDS<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Graminoids)
+summary(RMAGRAMINOIDS)
+
+RMAFORBS<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Forbs)
+summary(RMAFORBS)
+
+RMADECIDSHRUBS<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Decid_Shrubs)
+summary(RMADECIDSHRUBS)
+
+RMAEVERGRSHRUBS<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Evergr_Shrubs)
+summary(RMAEVERGRSHRUBS)
+
+RMAMOSSES<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Mosses)
+summary(RMAMOSSES)
+
+RMALICHENS<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Lichens)
+summary(RMALICHENS)
+
+RMABM<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_BM)
+summary(RMABM)
+
+RMAMEANH<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Mean_H, control=list(rel.tol=1e-8))
+summary(RMAMEANH)
+
+```
+##pseudoR² 
+```{r function R², echo=FALSE}
+r2_rma.mv<-function(model, null.model) { 
+
+r2.sigma <- (sum(null.model$sigma2) - sum(model$sigma2)) / sum(null.model$sigma2)
+r2.loglik <- 1 - (logLik(model) / logLik(null.model))
+return(cbind(r2.sigma,r2.loglik))
+
+}
+```
+
+```{r Pseudo R² posthoc, echo=FALSE}
+
+#Graminoids
+subset<-df %>% filter(!is.na(SMD_Graminoids))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMAGraminoids_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_Graminoids, method="ML")
+
+null.model<-RMAnull
+model<-RMAGraminoids_ml
+r2_Graminoids<-r2_rma.mv(model, null.model) 
+r2_Graminoids #r2.loglik = used in manuscript
+
+
+
+#Forbs
+subset<-df %>% filter(!is.na(SMD_Forbs))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMAForbs_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_Forbs, method="ML")
+
+null.model<-RMAnull
+model<-RMAForbs_ml
+r2_Forbs<-r2_rma.mv(model, null.model) 
+r2_Forbs #r2.loglik = used in manuscript
+
+
+
+#Decid_Shrubs
+subset<-df %>% filter(!is.na(SMD_Decid_Shrubs))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMADecid_Shrubs_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_Decid_Shrubs, method="ML")
+
+null.model<-RMAnull
+model<-RMADecid_Shrubs_ml
+r2_Decid_Shrubs<-r2_rma.mv(model, null.model) 
+r2_Decid_Shrubs #r2.loglik = used in manuscript
+
+
+
+#Evergr_Shrubs
+subset<-df %>% filter(!is.na(SMD_Evergr_Shrubs))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMAEvergr_Shrubs_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_Evergr_Shrubs, method="ML")
+
+null.model<-RMAnull
+model<-RMAEvergr_Shrubs_ml
+r2_Evergr_Shrubs<-r2_rma.mv(model, null.model) 
+r2_Evergr_Shrubs #r2.loglik = used in manuscript
+
+
+
+#Mosses
+subset<-df %>% filter(!is.na(SMD_Mosses))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMAMosses_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_Mosses, method="ML")
+
+null.model<-RMAnull
+model<-RMAMosses_ml
+r2_Mosses<-r2_rma.mv(model, null.model) 
+r2_Mosses #r2.loglik = used in manuscript
+
+
+
+#Lichens
+subset<-df %>% filter(!is.na(SMD_Lichens))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMALichens_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_Lichens, method="ML")
+
+null.model<-RMAnull
+model<-RMALichens_ml
+r2_Lichens<-r2_rma.mv(model, null.model) 
+r2_Lichens #r2.loglik = used in manuscript
+
+
+
+#BM
+subset<-df %>% filter(!is.na(SMD_BM))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMABM_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_BM, method="ML")
+
+null.model<-RMAnull
+model<-RMABM_ml
+r2_BM<-r2_rma.mv(model, null.model) 
+r2_BM #r2.loglik = used in manuscript
+
+
+
+#Mean_H
+subset<-df %>% filter(!is.na(SMD_Mean_H))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMAMean_H_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_Mean_H, method="ML")
+
+null.model<-RMAnull
+model<-RMAMean_H_ml
+r2_Mean_H<-r2_rma.mv(model, null.model) 
+r2_Mean_H #r2.loglik = used in manuscript
+
+```
+
+##model validation
+```{r model validation, echo=FALSE}
+
+#Graminoids
+Err<-resid(RMAGRAMINOIDS) 
+Fit<-fitted(RMAGRAMINOIDS) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD Graminoids") #normality?
+qqnorm(Err, ylab="residuals SMD Graminoids", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_Graminoids)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_Graminoids, y=Err, xlab="Graminoids", ylab="Residuals")
+
+
+#Forbs
+Err<-resid(RMAFORBS) 
+Fit<-fitted(RMAFORBS) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD Forbs") #normality?
+qqnorm(Err, ylab="residuals SMD Forbs", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_Forbs)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_Forbs, y=Err, xlab="Forbs", ylab="Residuals")
+
+
+
+#Decid_Shrubs
+Err<-resid(RMADECIDSHRUBS) 
+Fit<-fitted(RMADECIDSHRUBS) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD Decid_Shrubs") #normality?
+qqnorm(Err, ylab="residuals SMD Decid_Shrubs", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_Decid_Shrubs)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_Decid_Shrubs, y=Err, xlab="Decid_Shrubs", ylab="Residuals")
+
+
+#Evergr_Shrubs
+Err<-resid(RMAEVERGRSHRUBS) 
+Fit<-fitted(RMAEVERGRSHRUBS) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD Evergr_Shrubs") #normality?
+qqnorm(Err, ylab="residuals SMD Evergr_Shrubs", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_Evergr_Shrubs)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_Evergr_Shrubs, y=Err, xlab="Evergr_Shrubs", ylab="Residuals")
+
+#Mosses
+Err<-resid(RMAMOSSES) 
+Fit<-fitted(RMAMOSSES) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD Mosses") #normality?
+qqnorm(Err, ylab="residuals SMD Mosses", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_Mosses)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_Mosses, y=Err, xlab="Mosses", ylab="Residuals")
+
+
+
+#Lichens
+Err<-resid(RMALICHENS) 
+Fit<-fitted(RMALICHENS) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD Lichens") #normality?
+qqnorm(Err, ylab="residuals SMD Lichens", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_Lichens)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_Lichens, y=Err, xlab="Lichens", ylab="Residuals")
+
+
+#BM
+Err<-resid(RMABM) 
+Fit<-fitted(RMABM) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD BM") #normality?
+qqnorm(Err, ylab="residuals SMD BM", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_BM)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_BM, y=Err, xlab="BM", ylab="Residuals")
+
+
+#Mean_H
+Err<-resid(RMAMEANH) 
+Fit<-fitted(RMAMEANH) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD Mean_H") #normality?
+qqnorm(Err, ylab="residuals SMD Mean_H", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+df_sub<-df %>%
+  dplyr::select(Hedges_SMD,Hedges_SMD_VARIANCE,Exp_ID,Observation_ID,Year,SMD_Mean_H)%>%
+  tidyr::drop_na() #... and lets drop incomplete cases
+plot(x=df_sub$SMD_Mean_H, y=Err, xlab="Mean_H", ylab="Residuals")
+
+
+
+
+```
+
+##calculate I²
+```{r}
+# https://www.metafor-project.org/doku.php/tips:i2_multilevel_multivariate#multilevel_models
+# Jackson et al 2012 approach
+
+#### GRAMINOIDS ####
+
+RMAGRAMINOIDS.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Lichens)
+RMAGRAMINOIDS.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_Lichens)
+
+c(100 * (vcov(RMAGRAMINOIDS.R)[1,1] - vcov(RMAGRAMINOIDS.F)[1,1]) / vcov(RMAGRAMINOIDS.R)[1,1],
+  100 * (vcov(RMAGRAMINOIDS.R)[2,2] - vcov(RMAGRAMINOIDS.F)[2,2]) / vcov(RMAGRAMINOIDS.R)[2,2])
+
+#### FORBS ####
+
+RMAFORBS.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Forbs)
+RMAFORBS.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_Forbs)
+
+c(100 * (vcov(RMAFORBS.R)[1,1] - vcov(RMAFORBS.F)[1,1]) / vcov(RMAFORBS.R)[1,1],
+  100 * (vcov(RMAFORBS.R)[2,2] - vcov(RMAFORBS.F)[2,2]) / vcov(RMAFORBS.R)[2,2])
+
+#### DECIDSHRUBS ####
+
+RMADECIDSHRUBS.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Decid_Shrubs)
+RMADECIDSHRUBS.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_Decid_Shrubs)
+
+c(100 * (vcov(RMADECIDSHRUBS.R)[1,1] - vcov(RMADECIDSHRUBS.F)[1,1]) / vcov(RMADECIDSHRUBS.R)[1,1],
+  100 * (vcov(RMADECIDSHRUBS.R)[2,2] - vcov(RMADECIDSHRUBS.F)[2,2]) / vcov(RMADECIDSHRUBS.R)[2,2])
+
+#### EVERGRSHRUBS ####
+
+RMAEVERGRSHRUBS.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Evergr_Shrubs)
+RMAEVERGRSHRUBS.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_Evergr_Shrubs)
+
+c(100 * (vcov(RMAEVERGRSHRUBS.R)[1,1] - vcov(RMAEVERGRSHRUBS.F)[1,1]) / vcov(RMAEVERGRSHRUBS.R)[1,1],
+  100 * (vcov(RMAEVERGRSHRUBS.R)[2,2] - vcov(RMAEVERGRSHRUBS.F)[2,2]) / vcov(RMAEVERGRSHRUBS.R)[2,2])
+
+#### MOSSES ####
+
+RMAMOSSES.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Mosses)
+RMAMOSSES.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_Mosses)
+
+c(100 * (vcov(RMAMOSSES.R)[1,1] - vcov(RMAMOSSES.F)[1,1]) / vcov(RMAMOSSES.R)[1,1],
+  100 * (vcov(RMAMOSSES.R)[2,2] - vcov(RMAMOSSES.F)[2,2]) / vcov(RMAMOSSES.R)[2,2])
+
+#### LICHENS ####
+
+RMALICHENS.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Lichens)
+RMALICHENS.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_Lichens)
+
+c(100 * (vcov(RMALICHENS.R)[1,1] - vcov(RMALICHENS.F)[1,1]) / vcov(RMALICHENS.R)[1,1],
+  100 * (vcov(RMALICHENS.R)[2,2] - vcov(RMALICHENS.F)[2,2]) / vcov(RMALICHENS.R)[2,2])
+
+#### BM ####
+
+RMABM.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_BM)
+RMABM.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_BM)
+
+c(100 * (vcov(RMABM.R)[1,1] - vcov(RMABM.F)[1,1]) / vcov(RMABM.R)[1,1],
+  100 * (vcov(RMABM.R)[2,2] - vcov(RMABM.F)[2,2]) / vcov(RMABM.R)[2,2])
+
+#### MEANH ####
+
+RMAMEANH.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Mean_H,control=list(rel.tol=1e-8))
+RMAMEANH.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_Mean_H,control=list(rel.tol=1e-8))
+
+c(100 * (vcov(RMAMEANH.R)[1,1] - vcov(RMAMEANH.F)[1,1]) / vcov(RMAMEANH.R)[1,1],
+  100 * (vcov(RMAMEANH.R)[2,2] - vcov(RMAMEANH.F)[2,2]) / vcov(RMAMEANH.R)[2,2])
+
+
+```
+
+
+## effect plots
+
+### regplot
+```{r effect plots}
+
+regplot.rma(RMAGRAMINOIDS, mod="SMD_Graminoids", xlab="SMD_Graminoids", ylab="Hedges SMD")
+
+regplot.rma(RMAFORBS, mod="SMD_Forbs", xlab="SMD_Forbs", ylab="Hedges SMD")
+
+regplot.rma(RMADECIDSHRUBS, mod="SMD_Decid_Shrubs", xlab="SMD_Decid_Shrubs", ylab="Hedges SMD")
+
+regplot.rma(RMAEVERGRSHRUBS, mod="SMD_Evergr_Shrubs", xlab="SMD_Evergr_Shrubs", ylab="Hedges SMD")
+
+regplot.rma(RMAMOSSES, mod="SMD_Mosses", xlab="SMD_Mosses", ylab="Hedges SMD")
+
+regplot.rma(RMALICHENS, mod="SMD_Lichens", xlab="SMD_Lichens", ylab="Hedges SMD")
+
+regplot.rma(RMABM, mod="SMD_BM", xlab="SMD_BM", ylab="Hedges SMD")
+
+regplot.rma(RMAMEANH, mod="SMD_Mean_H", xlab="SMD_Mean_H", ylab="Hedges SMD")
+
+```
+
+### manuscript (only sign drivers)
+#### SMD_Graminoids
+```{r SMD_Graminoids, echo=FALSE}
+
+
+
+
+
+# df #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   SMD_Graminoids  )
+# model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt SMD_Graminoids
+# 0.5325743299 0.0003941625
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+SMD_Graminoidsmin<-min(df$SMD_Graminoids, na.rm=T)
+SMD_Graminoidsmax<-max(df$SMD_Graminoids, na.rm=T)
+SMD_Graminoidsmean<-mean(df$SMD_Graminoids, na.rm=T)
+SMD_Graminoidssd<-sd(df$SMD_Graminoids, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(SMD_Graminoidsmin, SMD_Graminoidsmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.SMD_Graminoids"="newmods"))
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+
+  parse(text = eqn2)
+  eqn2
+
+
+
+
+
+
+ ######### FIGURE #######
+ pdf("Ext_Fig_3_e_raw.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=SMD_Graminoids, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("SMD Graminoid cover")+#
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+
+  geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = SMD_Graminoidsmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+
+annotate("text",  x = SMD_Graminoidsmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```
+
+#### SMD_BM
+```{r SMD_BM, echo=FALSE}
+
+
+
+
+
+# df #just one factor so he will only use observations available for that factor (no need to subsect)
+
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   SMD_BM  )
+# model
+
+
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt SMD_BM
+# 0.5325743299 0.0003941625
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+SMD_BMmin<-min(df$SMD_BM, na.rm=T)
+SMD_BMmax<-max(df$SMD_BM, na.rm=T)
+SMD_BMmean<-mean(df$SMD_BM, na.rm=T)
+SMD_BMsd<-sd(df$SMD_BM, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(SMD_BMmin, SMD_BMmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.SMD_BM"="newmods"))
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g",
+    intercept,
+    slope,
+    Qm,
+    p_value
+  )
+
+  parse(text = eqn)
+  eqn
+# https://r-graphics.org/recipe-scatter-fitlines-text  CHECK THIS SITE IF ALSO WANT TO ADD R²/p BEHIND, NOW ADDED QM INSTEAD
+
+   eqn2 <- sprintf(
+    "italic(N) == %.0f",
+   N
+  )
+
+  parse(text = eqn2)
+  eqn2
+
+
+
+
+
+
+ ######### FIGURE #######
+ pdf("Ext_Fig_3_d_raw.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=SMD_BM, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1]) +
+
+
+#MODEL RESULTS
+   geom_line(color='black', data=predict, aes(x=newmods, y=pred), size=0.6)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[1])+ #ribbon line confidence interval toevoegen
+
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("SMD Biomass")+#
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+
+  geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = SMD_BMmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=8  )+
+annotate("text",  x = SMD_BMmin, y = 2, label = eqn2, parse = TRUE, hjust = 0, size=8  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+dev.off()
+
+```
+
+
+
+

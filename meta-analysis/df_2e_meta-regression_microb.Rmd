@@ -1,0 +1,312 @@
+---
+title: "meta-regression_microb"
+output:
+  html_document:
+    df_print: paged
+editor_options: 
+  chunk_output_type: inline
+---
+
+#load data
+```{r load data, include=FALSE}
+library("ggplot2")
+library("plyr")
+library("dplyr")
+library("car")
+library("tidyr")
+library("readxl")
+library("reshape2")
+library("tidyverse")
+library("ggrepel")
+library("tibble")
+library("ggforce")
+library("lubridate")
+library("esc")
+library("effsize")
+library("nlme") 
+library("metafor")
+library("corrplot")
+
+df<-read.csv("df_2.csv")
+df_Bacterial_BM_Weight<-read.csv("SMDBacterial_BM_Weight.csv", sep=',', dec='.')
+df_Fungal_BM_Weight<-read.csv("SMDFungal_BM_Weight.csv", sep=',', dec='.')
+df_FB_Ratio<-read.csv("SMDFB_Ratio.csv", sep=',', dec='.')
+
+
+#rename + change data type
+df<-plyr::rename(df,c("ï..Dataset_ID"="Dataset_ID"))
+df$Exp_ID<-as.factor(df$Exp_ID)
+df$Site<-as.factor(df$Site)
+df$Location<-as.factor(df$Location)
+df$Country<-as.factor(df$Country)
+
+df_Bacterial_BM_Weight<-plyr::rename(df_Bacterial_BM_Weight,c("Site_Flux_ID_new"="Dataset_ID"))
+df_Bacterial_BM_Weight<-plyr::rename(df_Bacterial_BM_Weight,c("X"="Observation_ID"))
+df_Bacterial_BM_Weight$Dataset_ID<-as.factor(df_Bacterial_BM_Weight$Dataset_ID)
+
+df_Fungal_BM_Weight<-plyr::rename(df_Fungal_BM_Weight,c("Site_Flux_ID_new"="Dataset_ID"))
+df_Fungal_BM_Weight<-plyr::rename(df_Fungal_BM_Weight,c("X"="Observation_ID"))
+df_Fungal_BM_Weight$Dataset_ID<-as.factor(df_Fungal_BM_Weight$Dataset_ID)
+
+df_FB_Ratio<-plyr::rename(df_FB_Ratio,c("Site_Flux_ID_new"="Dataset_ID"))
+df_FB_Ratio<-plyr::rename(df_FB_Ratio,c("X"="Observation_ID"))
+df_FB_Ratio$Dataset_ID<-as.factor(df_FB_Ratio$Dataset_ID)
+
+```
+
+#data check
+##numbers
+```{r data check, echo=FALSE}
+# df$SMD_Bacterial_BM_Weight[!is.na(df$Bacterial_BM_Weight)]
+# df$SMD_Fungal_BM_Weight[!is.na(df$SMD_Fungal_BM_Weight)]
+# df$SMD_FB_Ratio[!is.na(df$SMD_FB_Ratio)]
+
+```
+
+##distribution
+```{r B Distribution: histograms, echo=FALSE}
+tempBacterial_BM_Weight<-df[-which(is.na(df$SMD_Bacterial_BM_Weight)),]
+hist(tempBacterial_BM_Weight$SMD_Bacterial_BM_Weight, xlab="SMD_Bacterial_BM_Weight", ylab="Nr of Datasets", xlim=c(min(tempBacterial_BM_Weight$SMD_Bacterial_BM_Weight)-2,max(tempBacterial_BM_Weight$SMD_Bacterial_BM_Weight)+2))
+
+tempFungal_BM_Weight<-df[-which(is.na(df$SMD_Fungal_BM_Weight)),]
+hist(tempFungal_BM_Weight$SMD_Fungal_BM_Weight, xlab="SMD_Fungal_BM_Weight", ylab="Nr of Datasets", xlim=c(min(tempFungal_BM_Weight$SMD_Fungal_BM_Weight)-2,max(tempFungal_BM_Weight$SMD_Fungal_BM_Weight)+2))
+
+tempFB_Ratio<-df[-which(is.na(df$SMD_FB_Ratio)),]
+hist(tempFB_Ratio$SMD_FB_Ratio, xlab="SMD_FB_Ratio", ylab="Nr of Datasets", xlim=c(min(tempFB_Ratio$SMD_FB_Ratio)-2,max(tempFB_Ratio$SMD_FB_Ratio)+2))
+
+```
+
+##correlation
+
+```{r B Collinearity, echo=FALSE}
+
+dfcor<-df[ , which(names(df) %in% c("SMD_Bacterial_BM_Weight", "SMD_Fungal_BM_Weight", "SMD_FB_Ratio"))]
+cor<- cor(dfcor, use="pairwise.complete.obs")
+cor
+
+dfcor2<-df[ , which(names(df) %in% c("Hedges_SMD","SMD_Bacterial_BM_Weight", "SMD_Fungal_BM_Weight"))] 
+cor2 <- cor(dfcor2, use="pairwise.complete.obs")
+cor2
+
+par(mfrow=c(1,2))
+corrplot.mixed(cor, main="Continuous drivers") 
+corrplot.mixed(cor2, tl.cex=0.7, main="Continuous drivers and response")
+```
+
+
+##effect of OTC
+###Hedges SMD
+#### Bacterial_BM_Weight
+```{r Bacterial_BM_Weight, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Bacterial_BM_Weight <- df_Bacterial_BM_Weight %>% inner_join(dfsub, by="Dataset_ID")
+df_Bacterial_BM_Weight<- df_Bacterial_BM_Weight %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDBacterial_BM_Weight, Hedges_SMDBacterial_BM_Weight_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Bacterial_BM_Weight)
+summary(model1)
+```
+
+
+
+#### Fungal_BM_Weight
+```{r Fungal_BM_Weight, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Fungal_BM_Weight <- df_Fungal_BM_Weight %>% inner_join(dfsub, by="Dataset_ID")
+df_Fungal_BM_Weight<- df_Fungal_BM_Weight %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDFungal_BM_Weight, Hedges_SMDFungal_BM_Weight_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Fungal_BM_Weight)
+summary(model1)
+```
+
+
+
+#### FB_Ratio
+```{r FB_Ratio, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_FB_Ratio <- df_FB_Ratio %>% inner_join(dfsub, by="Dataset_ID")
+df_FB_Ratio<- df_FB_Ratio %>% distinct(MEAN_CTL, SDEV_CTL, SS_CTL, MEAN_OTC, SDEV_OTC, SS_OTC, SS_OTC, .keep_all = TRUE)
+model1 <- rma.mv(Hedges_SMDFB_Ratio, Hedges_SMDFB_Ratio_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_FB_Ratio)
+summary(model1)
+```
+
+### RMD
+##### Bacterial_BM_Weight
+```{r Bacterial_BM_Weight, echo=FALSE}
+
+# First run full script df_1b to get the csv files
+df_Bacterial_BM_Weight_RMD<-read.csv("RMDBacterial_BM_Weight.csv")
+df_Bacterial_BM_Weight_RMD<-plyr::rename(df_Bacterial_BM_Weight_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Bacterial_BM_Weight_RMD <- df_Bacterial_BM_Weight_RMD %>% inner_join(dfsub, by="Dataset_ID")
+
+model1_RMD <- rma.mv(RMDBacterial_BM_Weight, RMDBacterial_BM_Weight_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Bacterial_BM_Weight_RMD)
+summary(model1_RMD)
+
+```
+
+##### Fungal_BM_Weight
+```{r Fungal_BM_Weight, echo=FALSE}
+
+# First run full script df_1b to get the csv files
+df_Fungal_BM_Weight_RMD<-read.csv("RMDFungal_BM_Weight.csv")
+df_Fungal_BM_Weight_RMD<-plyr::rename(df_Fungal_BM_Weight_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_Fungal_BM_Weight_RMD <- df_Fungal_BM_Weight_RMD %>% inner_join(dfsub, by="Dataset_ID")
+
+model1_RMD <- rma.mv(RMDFungal_BM_Weight, RMDFungal_BM_Weight_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_Fungal_BM_Weight_RMD)
+summary(model1_RMD)
+
+```
+
+
+
+##### FB_Ratio
+```{r FB_Ratio, echo=FALSE}
+
+# First run full script df_1b to get the csv files
+df_FB_Ratio_RMD<-read.csv("RMDFB_Ratio.csv")
+df_FB_Ratio_RMD<-plyr::rename(df_FB_Ratio_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_FB_Ratio_RMD <- df_FB_Ratio_RMD %>% inner_join(dfsub, by="Dataset_ID")
+
+model1_RMD <- rma.mv(RMDFB_Ratio, RMDFB_Ratio_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_FB_Ratio_RMD)
+summary(model1_RMD)
+
+```
+
+
+
+#metaregression
+##model output
+```{r single models, echo=FALSE}
+
+RMABacterial_BM_Weight<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Bacterial_BM_Weight)
+summary(RMABacterial_BM_Weight)
+
+RMAFungal_BM_Weight<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_Fungal_BM_Weight,control=list(optimizer="optim", optmethod="BFGS"))
+summary(RMAFungal_BM_Weight)
+
+RMAFB_Ratio<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_FB_Ratio)
+summary(RMAFB_Ratio)
+
+```
+##pseudoR² 
+```{r function R², echo=FALSE}
+r2_rma.mv<-function(model, null.model) { 
+
+r2.sigma <- (sum(null.model$sigma2) - sum(model$sigma2)) / sum(null.model$sigma2)
+r2.loglik <- 1 - (logLik(model) / logLik(null.model))
+return(cbind(r2.sigma,r2.loglik))
+
+}
+```
+
+```{r Pseudo R² posthoc, echo=FALSE}
+
+#Bacterial_BM_Weight
+subset<-df %>% filter(!is.na(SMD_Bacterial_BM_Weight))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMABacterial_BM_Weight_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_Bacterial_BM_Weight, method="ML")
+
+null.model<-RMAnull
+model<-RMABacterial_BM_Weight_ml
+r2_Bacterial_BM_Weight<-r2_rma.mv(model, null.model) 
+r2_Bacterial_BM_Weight #r2.loglik = used in manuscript
+
+
+
+#Fungal_BM_Weight
+subset<-df %>% filter(!is.na(SMD_Fungal_BM_Weight))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMAFungal_BM_Weight_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_Fungal_BM_Weight, method="ML")
+
+null.model<-RMAnull
+model<-RMAFungal_BM_Weight_ml
+r2_Fungal_BM_Weight<-r2_rma.mv(model, null.model) 
+r2_Fungal_BM_Weight #r2.loglik = used in manuscript
+
+
+
+#FB_Ratio
+subset<-df %>% filter(!is.na(SMD_FB_Ratio))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMAFB_Ratio_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_FB_Ratio, method="ML")
+
+null.model<-RMAnull
+model<-RMAFB_Ratio_ml
+r2_FB_Ratio<-r2_rma.mv(model, null.model) 
+r2_FB_Ratio #r2.loglik = used in manuscript
+
+
+
+```
+
+##model validation
+```{r model validation, echo=FALSE}
+# 
+# #Bacterial_BM_Weight
+# Err<-resid(RMABacterial_BM_Weight) 
+# Fit<-fitted(RMABacterial_BM_Weight) 
+# # Residuals vs fitted
+# plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+# #Normality of fitted and residuals
+# hist(Fit, main="Histogram fitted values SMD Bacterial_BM_Weight") #normality?
+# qqnorm(Err, ylab="residuals SMD Bacterial_BM_Weight", xlab="scores") 
+# # profile.rma.mv(RMAAT)
+# # Residuals vs explanatory 
+# # plot(x=df_Bacterial_BM_Weight$Hedges_SMDBacterial_BM_Weight, y=Err, xlab="SMD_Bacterial_BM_Weight", ylab="Residuals")
+
+# 
+# #Fungal_BM_Weight
+# Err<-resid(RMAFungal_BM_Weight) 
+# Fit<-fitted(RMAFungal_BM_Weight) 
+# # Residuals vs fitted
+# plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+# #Normality of fitted and residuals
+# hist(Fit, main="Histogram fitted values SMD Fungal_BM_Weight") #normality?
+# qqnorm(Err, ylab="residuals SMD Fungal_BM_Weight", xlab="scores") 
+# # profile.rma.mv(RMAAT)
+# # Residuals vs explanatory 
+# plot(x=df_Fungal_BM_Weight$Hedges_SMDFungal_BM_Weight, y=Err, xlab="SMD_Fungal_BM_Weight", ylab="Residuals")
+
+# 
+# #FB_Ratio
+# Err<-resid(RMAFB_Ratio) 
+# Fit<-fitted(RMAFB_Ratio) 
+# # Residuals vs fitted
+# plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+# #Normality of fitted and residuals
+# hist(Fit, main="Histogram fitted values SMD FB_Ratio") #normality?
+# qqnorm(Err, ylab="residuals SMD FB_Ratio", xlab="scores") 
+# # profile.rma.mv(RMAAT)
+# # Residuals vs explanatory 
+# plot(x=df_FB_Ratio$Hedges_SMDFB_Ratio, y=Err, xlab="SMD_FB_Ratio", ylab="Residuals")
+
+
+```
+
+
+##effect plots
+###regplots
+```{r effect plots}
+
+regplot.rma(RMABacterial_BM_Weight, mod="SMD_Bacterial_BM_Weight", xlab="SMD_Bacterial_BM_Weight", ylab="Hedges SMD")
+
+regplot.rma(RMAFungal_BM_Weight, mod="SMD_Fungal_BM_Weight", xlab="SMD_Fungal_BM_Weight", ylab="Hedges SMD")
+
+regplot.rma(RMAFB_Ratio, mod="SMD_FB_Ratio", xlab="SMD_FB_Ratio", ylab="Hedges SMD")
+
+
+```
+
+

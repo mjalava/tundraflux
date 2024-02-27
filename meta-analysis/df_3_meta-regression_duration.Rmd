@@ -1,0 +1,951 @@
+---
+title: "Duration-metaregression"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+
+<!-- FYI df = full dataframe; df_orphans = dataframe only experiments with 1 year of ER data; df_no_orphans = dataframe only experiments with more than 1 year of ER data. Across experiments: on df; Within experiments: on df_no_orphans -->
+
+
+# 1 load data 
+```{r load data, include=FALSE}
+
+library("ggplot2")
+library("plyr")
+library("dplyr")
+library("car")
+library("tidyr")
+library("readxl")
+library("reshape2")
+library("tidyverse")
+library("ggrepel")
+library("tibble")
+library("ggforce")
+library("lubridate")
+library("esc")
+library("effsize")
+library("nlme") 
+library("metafor")
+library("corrplot")
+library("multcomp") #"for post hoc tests"
+library("lme4")
+
+df<-read.csv("df_2.csv")
+
+#rename+change data types
+df<-plyr::rename(df,c("ï..Dataset_ID"="Dataset_ID"))
+df$Dataset_ID<-as.factor(df$Dataset_ID)
+df$Exp_ID<-as.factor(df$Exp_ID)
+df$Site<-as.factor(df$Site)
+df$Location<-as.factor(df$Location)
+df$Country<-as.factor(df$Country)
+
+
+
+```
+
+# 2 data check
+## numbers
+```{r data check}
+
+#duration - create age class
+df$Dur_Age_Class<-cut(df$Duration, seq(0,30,5), right=FALSE, labels=c(1:6))
+df$Duration
+df$Dur_Age_Class
+summary(df$Dur_Age_Class)
+#put age class 4, 5 and 6 together (>15 years) cfr original supp fig 5
+df$Dur_Age_Class[which(df$Dur_Age_Class==4 | df$Dur_Age_Class==5 | df$Dur_Age_Class==6)]<-"4"
+
+summary(df$Dur_Age_Class)
+df$Dur_Age_Class<-droplevels(df$Dur_Age_Class)
+
+# df$Duration[!is.na(df$Duration)]
+# df$Dur_Age_Class[!is.na(df$Dur_Age_Class)]
+
+
+#duration - remove orphans in subset  (for within-experiment models)
+Nr_ER_years<-df %>% group_by(Exp_ID) %>% summarize(NrER_years=n_distinct((Year)))
+Exp_ID_orphans<-as.character(Nr_ER_years$Exp_ID[which(Nr_ER_years$NrER_years==1)]) #orphans (1 year)
+Exp_ID_no_orphans<-as.character(Nr_ER_years$Exp_ID[which(Nr_ER_years$NrER_years>1)]) #no orphans (>1 year)
+
+df_orphans<-df[which(df$Exp_ID %in% Exp_ID_orphans),] #115 datasets covering 35 experiments
+df_no_orphans<-df[-which(df$Exp_ID %in% Exp_ID_orphans),] #21 datasets/experiments
+# 136-21
+  
+
+```
+
+## distribution
+```{r B Distribution: histograms}
+hist(df$Duration, xlab="Duration", ylab="Nr of Datasets")
+hist(df_orphans$Duration, xlab="Duration", ylab="Nr of Datasets")
+hist(df_no_orphans$Duration, xlab="Duration", ylab="Nr of Datasets")
+
+hist(as.numeric(df$Dur_Age_Class), xlab="Duration", ylab="Nr of Datasets")
+hist(as.numeric(df_orphans$Dur_Age_Class), xlab="Duration", ylab="Nr of Datasets")
+hist(as.numeric(df_no_orphans$Dur_Age_Class), xlab="Duration", ylab="Nr of Datasets")
+```
+
+# 3 metaregression 
+## ACROSS experiments: ~Duration
+
+### 1) No age classes
+#### model output
+```{r single models}
+
+#Significant effect of duration as continuous driver?
+RMADuration<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Duration)
+summary(RMADuration)
+
+
+#Significant effect of duration as continuous driver?
+RMADuration_Machine_Type<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Duration+Machine_Type)
+summary(RMADuration_Machine_Type)
+```
+
+#### pseudoR² 
+```{r function R²}
+r2_rma.mv<-function(model, null.model) { 
+
+r2.sigma <- (sum(null.model$sigma2) - sum(model$sigma2)) / sum(null.model$sigma2)
+r2.loglik <- 1 - (logLik(model) / logLik(null.model))
+return(cbind(r2.sigma,r2.loglik))
+
+}
+```
+
+```{r Pseudo R² posthoc}
+#Duration
+subset<-df %>% filter(!is.na(Duration))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMADuration_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ Duration, method="ML")
+
+null.model<-RMAnull
+model<-RMADuration_ml
+r2_Duration<-r2_rma.mv(model, null.model) 
+r2_Duration #r2.loglik = used in manuscript
+
+
+
+#Duration
+subset<-df %>% filter(!is.na(Duration))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMADuration_Machine_Type_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ Machine_Type+ Duration, method="ML")
+
+null.model<-RMAnull
+model<-RMADuration_Machine_Type_ml
+r2_Duration_Machine_Type<-r2_rma.mv(model, null.model) 
+r2_Duration_Machine_Type #r2.loglik = used in manuscript
+
+```
+
+#### model validation
+```{r model validation}
+
+#Duration
+Err<-resid(RMADuration) 
+Fit<-fitted(RMADuration) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMADuration - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD") #normality?
+qqnorm(Err, ylab="residuals", xlab="scores") 
+# profile.rma.mv(RMADuration)
+# Residuals vs explanatory 
+plot(x=df$Duration, y=Err, xlab="Duration", ylab="Residuals")
+
+```
+
+
+#### effect plot
+##### regplot
+```{r}
+#Duration as continuous driver
+# pdf("1_Fig_Across_Exp_NoAgeClass.pdf", width=14, height=10)
+regplot.rma(RMADuration, mod="Duration", xlab="Duration", ylab="Hedges SMD ER")
+# dev.off()
+```
+
+##### manuscript
+```{r Duration, echo=FALSE}
+# 
+# # df #just one factor so he will only use observations available for that factor (no need to subset)
+# 
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   Duration  )
+# model
+# 
+# 
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt Duration
+# 0.5325743299 0.0003941625
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+Durationmin<-min(df$Duration, na.rm=T)
+Durationmax<-max(df$Duration, na.rm=T)
+Durationmean<-mean(df$Duration, na.rm=T)
+Durationsd<-sd(df$Duration, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(Durationmin, Durationmax, length=20)), addx=TRUE))
+predict<-plyr::rename(predict,c("X.Duration"="newmods"))
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g * ',' ~~ italic(N) ~ '=' ~ %.0f" ,
+    intercept,
+    slope,
+    Qm,
+    p_value,
+    N
+  )
+
+  parse(text = eqn)
+  eqn
+
+
+
+
+
+
+
+ ######### FIGURE #######
+ # pdf("1a_Fig_Across_Exp_NoAgeClass.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=Duration, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=c("#D3D3D3")) +
+
+
+#MODEL RESULTS
+   geom_line(color=cbPalette[6], data=predict, aes(x=newmods, y=pred), size=1.2)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[6])+ #ribbon line confidence interval toevoegen
+
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("Hedges SMD") +
+  xlab("Duration")+#TO DO MANUAL:
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+
+  # geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = Durationmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=5,color=cbPalette[6]  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+# dev.off()
+
+```
+
+```{r Duration, echo=FALSE}
+# 
+# # df #just one factor so he will only use observations available for that factor (no need to subset)
+# 
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   Duration + Machine_Type )
+# model
+# 
+# 
+
+# Extract regression line from the model
+coef(model)
+# coef(summary(RMASOILCSTOCK))
+# intrcpt Duration
+# 0.5325743299 0.0003941625
+intercept<-coef(model)[[1]]
+slope<-coef(model)[[2]]
+Qm<-model$QM
+p_value<-model$pval[2]
+N<-model$k
+
+###### make predictions
+
+#for which x-values?
+Durationmin<-min(df$Duration, na.rm=T)
+Durationmax<-max(df$Duration, na.rm=T)
+Durationmean<-mean(df$Duration, na.rm=T)
+Durationsd<-sd(df$Duration, na.rm=T)
+
+#CIs https://www.r-bloggers.com/confidence-intervals-for-prediction-in-glmms/
+# https://search.r-project.org/CRAN/refmans/metafor/html/predict.rma.html
+predict<-as.data.frame(predict(model, newmods=cbind(seq(Durationmin, Durationmax, length=20), Machine_Type=factor(c("IR"))), addx=TRUE))
+predict<-plyr::rename(predict,c("X.Duration"="newmods"))
+# names(predict)
+
+#colorblind friendly figures!
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.3g + %.3g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g * ',' ~~ italic(N) ~ '=' ~ %.0f" ,
+    intercept,
+    slope,
+    Qm,
+    p_value,
+    N
+  )
+
+  parse(text = eqn)
+  eqn
+
+
+
+
+
+
+
+ ######### FIGURE #######
+ # pdf("1b_Fig_Across_Exp_NoAgeClass_Machine_Type.pdf", width=10, height=10)
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df, mapping=aes(x=Duration, y=Hedges_SMD), size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=c("#D3D3D3")) +
+
+
+#MODEL RESULTS
+   geom_line(color=cbPalette[6], data=predict, aes(x=newmods, y=pred), size=1.2)+ #regression line toevoegen obv predictions rma.mv object
+  geom_ribbon(data=predict, aes(x=newmods, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[6])+ #ribbon line confidence interval toevoegen
+
+#FORMATTING
+  # ggtitle("Soil C stock +- 95%CI") +
+  # scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  # scale_x_continuous(limits = c(40,185))+
+
+
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("Hedges SMD") +
+  xlab("Duration")+#TO DO MANUAL:
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+
+  # geom_vline(xintercept=0, linetype="dashed",color = "grey", size=0.4)+
+
+
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+
+  # annotate("text", x=105, y=-1.4, label= "y=0.7-0.0005*x, Qm=4.2, p-val=0.04*, R²=0.17", size=8) #when I did it manual
+annotate("text",  x = Durationmin, y = -1, label = eqn, parse = TRUE, hjust = 0, size=5,color=cbPalette[6]  )
+
+# https://stackoverflow.com/questions/28755576/add-text-to-ggplot
+# hjust and vjust explanation: https://stackoverflow.com/questions/7263849/what-do-hjust-and-vjust-do-when-making-a-plot-using-ggplot
+# dev.off()
+
+```
+
+
+
+### 2) Age classes
+
+#### model output
+```{r single models}
+
+#Significant effect of duration within each age class?
+#within each age class: test effect of duration (to account for 'nonlinearity')
+
+# levels(df$Dur_Age_Class)
+df_Age_Class_1<-df %>% filter(Dur_Age_Class==1)
+df_Age_Class_2<-df %>% filter(Dur_Age_Class==2)
+df_Age_Class_3<-df %>% filter(Dur_Age_Class==3)
+df_Age_Class_4<-df %>% filter(Dur_Age_Class==4)
+# summary(df$Dur_Age_Class)
+
+#Duration as continuous driver
+#This tells you what we look for: 'how does the effect over time look like when we split up in age classes'
+RMADur_Age_Class_1<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_1, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Duration)
+RMADur_Age_Class_2<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_2, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Duration)
+RMADur_Age_Class_3<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_3, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Duration)
+RMADur_Age_Class_4<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_4, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Duration)
+
+RMADur_Age_Class_1
+RMADur_Age_Class_2
+RMADur_Age_Class_3
+RMADur_Age_Class_4
+
+
+```
+
+#### pseudoR² 
+```{r function R²}
+r2_rma.mv<-function(model, null.model) { 
+
+r2.sigma <- (sum(null.model$sigma2) - sum(model$sigma2)) / sum(null.model$sigma2)
+r2.loglik <- 1 - (logLik(model) / logLik(null.model))
+return(cbind(r2.sigma,r2.loglik))
+
+}
+```
+
+```{r Pseudo R² posthoc}
+#Age class 1
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_1, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMADur_Age_Class_1_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_1, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Duration, method="ML")
+
+null.model<-RMAnull
+model<-RMADur_Age_Class_1_ml
+r2_Dur_Age_Class_1<-r2_rma.mv(model, null.model) 
+r2_Dur_Age_Class_1 #r2.loglik = used in manuscript
+
+
+#Age class 2
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_2, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMADur_Age_Class_2_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_2, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Duration, method="ML")
+
+null.model<-RMAnull
+model<-RMADur_Age_Class_2_ml
+r2_Dur_Age_Class_2<-r2_rma.mv(model, null.model) 
+r2_Dur_Age_Class_2 #r2.loglik = used in manuscript
+
+
+#Age class 3
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_3, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML",control=list(iter.max=500, rel.tol=1e-8) ) 
+RMADur_Age_Class_3_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_3, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Duration, method="ML")
+
+null.model<-RMAnull
+model<-RMADur_Age_Class_3_ml
+r2_Dur_Age_Class_3<-r2_rma.mv(model, null.model) 
+r2_Dur_Age_Class_3 #r2.loglik = used in manuscript
+
+
+#Age class 4
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_4, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMADur_Age_Class_4_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df_Age_Class_4, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ Duration, method="ML")
+
+null.model<-RMAnull
+model<-RMADur_Age_Class_4_ml
+r2_Dur_Age_Class_4<-r2_rma.mv(model, null.model) 
+r2_Dur_Age_Class_4 #r2.loglik = used in manuscript
+
+
+
+```
+
+#### model validation
+```{r model validation}
+
+#Age class 1
+Err<-resid(RMADur_Age_Class_1) 
+Fit<-fitted(RMADur_Age_Class_1) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMADur_Age_Class_1 - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD") #normality?
+qqnorm(Err, ylab="residuals", xlab="scores") 
+# profile.rma.mv( RMADur_Age_Class_1)
+# Residuals vs explanatory 
+plot(x=df_Age_Class_1$Duration, y=Err, xlab="Duration", ylab="Residuals")
+
+
+#Age class 2
+Err<-resid(RMADur_Age_Class_2) 
+Fit<-fitted(RMADur_Age_Class_2) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMADur_Age_Class_2 - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD") #normality?
+qqnorm(Err, ylab="residuals", xlab="scores") 
+# profile.rma.mv( RMADur_Age_Class_2)
+# Residuals vs explanatory 
+plot(x=df_Age_Class_2$Duration, y=Err, xlab="Duration", ylab="Residuals")
+
+
+#Age class 1
+Err<-resid(RMADur_Age_Class_3) 
+Fit<-fitted(RMADur_Age_Class_3) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMADur_Age_Class_3 - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD") #normality?
+qqnorm(Err, ylab="residuals", xlab="scores") 
+# profile.rma.mv( RMADur_Age_Class_3)
+# Residuals vs explanatory 
+plot(x=df_Age_Class_3$Duration, y=Err, xlab="Duration", ylab="Residuals")
+
+
+#Age class 1
+Err<-resid(RMADur_Age_Class_4) 
+Fit<-fitted(RMADur_Age_Class_4) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMADur_Age_Class_4 - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD") #normality?
+qqnorm(Err, ylab="residuals", xlab="scores") 
+# profile.rma.mv( RMADur_Age_Class_4)
+# Residuals vs explanatory 
+plot(x=df_Age_Class_4$Duration, y=Err, xlab="Duration", ylab="Residuals")
+
+```
+
+
+#### effect plot
+```{r}
+# quick version separate
+
+regplot.rma(RMADur_Age_Class_1, mod="Duration", xlab="Duration", ylab="Hedges SMD ER")
+regplot.rma(RMADur_Age_Class_2, mod="Duration", xlab="Duration", ylab="Hedges SMD ER")
+regplot.rma(RMADur_Age_Class_3, mod="Duration", xlab="Duration", ylab="Hedges SMD ER")
+regplot.rma(RMADur_Age_Class_4, mod="Duration", xlab="Duration", ylab="Hedges SMD ER")
+
+
+
+# long version combined
+
+#### FIGURE ####
+#Figure that combines them in one:
+#colorblind friendly figures
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+ 
+# Extract regression lines from the model
+
+#AGE CLASS 1
+coef(RMADur_Age_Class_1)
+slope<-coef(RMADur_Age_Class_1) 
+Qm<-RMADur_Age_Class_1$QM 
+p_value<-RMADur_Age_Class_1$pval 
+predict_1<-as.data.frame(predict.rma(RMADur_Age_Class_1,newmods=cbind(seq(0,4, length=20)), addx=TRUE))
+
+#AGE CLASS 2
+coef(RMADur_Age_Class_2)
+slope<-coef(RMADur_Age_Class_2) 
+Qm<-RMADur_Age_Class_2$QM 
+p_value<-RMADur_Age_Class_2$pval 
+predict_2<-as.data.frame(predict.rma(RMADur_Age_Class_2,newmods=cbind(seq(5,9, length=20)), addx=TRUE))
+
+#AGE CLASS 3
+coef(RMADur_Age_Class_3)
+slope<-coef(RMADur_Age_Class_3) 
+Qm<-RMADur_Age_Class_3$QM 
+p_value<-RMADur_Age_Class_3$pval 
+predict_3<-as.data.frame(predict.rma(RMADur_Age_Class_3,newmods=cbind(seq(10,14, length=20)), addx=TRUE))
+
+#AGE CLASS 4
+coef(RMADur_Age_Class_4)
+slope<-coef(RMADur_Age_Class_4) 
+Qm<-RMADur_Age_Class_4$QM 
+p_value<-RMADur_Age_Class_4$pval 
+predict_4<-as.data.frame(predict.rma(RMADur_Age_Class_4,newmods=cbind(seq(15,25, length=20)), addx=TRUE))
+
+
+
+
+
+intercept1<-coef(RMADur_Age_Class_1)[[1]]
+slope1<-coef(RMADur_Age_Class_1)[[2]]
+Qm1<-RMADur_Age_Class_1$QM 
+p1<-(RMADur_Age_Class_1$pval)[[2]] 
+N1<-RMADur_Age_Class_1$k
+
+intercept2<-coef(RMADur_Age_Class_2)[[1]]
+slope2<-coef(RMADur_Age_Class_2)[[2]]
+Qm2<-RMADur_Age_Class_2$QM 
+p2<-(RMADur_Age_Class_2$pval)[[2]] 
+N2<-RMADur_Age_Class_2$k
+
+intercept3<-coef(RMADur_Age_Class_3)[[1]]
+slope3<-coef(RMADur_Age_Class_3)[[2]]
+Qm3<-RMADur_Age_Class_3$QM 
+p3<-(RMADur_Age_Class_3$pval)[[2]] 
+N3<-RMADur_Age_Class_3$k
+
+intercept4<-coef(RMADur_Age_Class_1)[[1]]
+slope4<-coef(RMADur_Age_Class_1)[[2]]
+Qm4<-RMADur_Age_Class_4$QM 
+p4<-(RMADur_Age_Class_4$pval)[[2]] 
+N4<-RMADur_Age_Class_4$k
+
+
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(y) == %.1g + %.1g * italic(x) * ',' ~~ italic(Qm) ~ '=' ~ %.1g *  ',' ~~ italic(p) ~ '=' ~ %.1g *  ',' ~~ italic(N) ~ '=' ~ %.0f",
+    intercept1,
+    slope1,
+    Qm1,
+    p1, 
+    N1
+  )
+
+  parse(text = eqn)
+  eqn
+
+  
+  
+  eqn2 <- sprintf(
+    "italic(y) == %.1g + %.1g * italic(x) * 
+    ',' ~~ italic(Qm) ~ '=' ~ %.1g * 
+    ',' ~~ italic(p) ~ '=' ~ %.1g *
+    ',' ~~ italic(N) ~ '=' ~ %.0f" ,
+    intercept2,
+    slope2,
+    Qm2,
+    p2, 
+    N2
+  )
+  
+  parse(text = eqn2)
+  eqn2
+
+  
+  
+  eqn3 <- sprintf(
+    "italic(y) == %.1g + %.1g * italic(x) * 
+    ',' ~~ italic(Qm) ~ '=' ~ %.1g * 
+    ',' ~~ italic(p) ~ '=' ~ %.1g *
+    ',' ~~ italic(N) ~ '=' ~ %.0f" ,
+    intercept3,
+    slope3,
+    Qm3,
+    p3, 
+    N3
+  )
+  
+  parse(text = eqn3)
+  eqn3
+
+  
+  
+  eqn4 <- sprintf(
+    "italic(y) == %.1g + %.1g * italic(x) * 
+    ',' ~~ italic(Qm) ~ '=' ~ %.1g * 
+    ',' ~~ italic(p) ~ '=' ~ %.1g *
+    ',' ~~ italic(N) ~ '=' ~ %.0f" ,
+    intercept4,
+    slope4,
+    Qm4,
+    p4, 
+    N4
+  )
+  
+  parse(text = eqn4)
+  eqn4
+
+
+
+pdf("Fig_3_b_raw.pdf", width=14, height=10)
+
+#ACTUAL DATA
+ggplot() +
+  geom_point(data=df_Age_Class_1, mapping=aes(x=Duration, y=Hedges_SMD), size=(1/sqrt(df_Age_Class_1$Hedges_SMD_VARIANCE)), shape=21, fill=c("#D3D3D3")) +
+  geom_point(data=df_Age_Class_2, mapping=aes(x=Duration, y=Hedges_SMD), size=(1/sqrt(df_Age_Class_2$Hedges_SMD_VARIANCE)), shape=21, fill=c("#D3D3D3")) +
+  geom_point(data=df_Age_Class_3, mapping=aes(x=Duration, y=Hedges_SMD), size=(1/sqrt(df_Age_Class_3$Hedges_SMD_VARIANCE)), shape=21, fill=c("#D3D3D3")) +
+  geom_point(data=df_Age_Class_4, mapping=aes(x=Duration, y=Hedges_SMD), size=(1/sqrt(df_Age_Class_4$Hedges_SMD_VARIANCE)), shape=21, fill=c("#D3D3D3")) +
+
+#MODEL RESULTS
+  # regression lines obv predict.rma
+   geom_line(color=cbPalette[6], data=predict_1, aes(x=X.Duration, y=pred), size=1.2)+ 
+   geom_line(color=cbPalette[6], data=predict_2, aes(x=X.Duration, y=pred), size=1.2)+ 
+   geom_line(color=cbPalette[6], data=predict_3, aes(x=X.Duration, y=pred), size=1.2)+ 
+   geom_line(color=cbPalette[6], data=predict_4, aes(x=X.Duration, y=pred), size=1.2)+ 
+
+  # confidence ribbons obv predict.rma
+   geom_ribbon(data=predict_1, aes(x=X.Duration, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[6])+
+   geom_ribbon(data=predict_2, aes(x=X.Duration, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[6])+
+   geom_ribbon(data=predict_3, aes(x=X.Duration, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[6])+
+   geom_ribbon(data=predict_4, aes(x=X.Duration, ymin=ci.lb, ymax=ci.ub), linetype=2, alpha=0.1, color=cbPalette[6])+
+
+  
+#FORMATTING
+  # ggtitle("Zone (Mean SMD + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("Age Class")+#TO DO MANUAL: 
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+  theme_classic()+
+ theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1)))+
+  
+# ##SAMPLE SIZE  
+#   annotate("text", x=2, y=1.8, label= "N=70", size=5)+
+#   annotate("text", x=7, y=1.8, label= "N=28", size=5)+
+#   annotate("text", x=12, y=1.8, label= "N=15", size=5)+
+#   annotate("text", x=17, y=1.8, label= "N=23", size=5)+
+
+#REGRESSION MODEL RESULTS
+  # annotate("text", x=2, y=2.2, label= "y=0.63-0.01*x Qm=0 \n p=0.87ns N=70", size=5, color=cbPalette[6])+# when i did manual 
+  # annotate("text", x=7, y=2.1, label= "y=1.31-0.13*x Qm=60 \n p=<0.0001*** N=28", size=5,color=cbPalette[6])+
+  # annotate("text", x=12, y=2.0, label= "y=-1.45+0.15*x Qm=6 \n p=0.02* N=15", size=5,color=cbPalette[6])+
+  # annotate("text", x=20, y=1.9, label= "y=0.73-0.00*x Qm=0 \n p=0.94ns N=23", size=5,color=cbPalette[6])
+  annotate("text",  x = 0, y = 2.2, label = eqn, parse = TRUE, hjust = 0, size=5,color=cbPalette[6]  )+ 
+  annotate("text",  x = 4, y = 2.1, label = eqn2, parse = TRUE, hjust = 0, size=5 ,color=cbPalette[6] )+ 
+  annotate("text",  x = 8, y = 2.0, label = eqn3, parse = TRUE, hjust = 0, size=5 ,color=cbPalette[6] )+ 
+  annotate("text",  x = 15, y = 1.9, label = eqn4, parse = TRUE, hjust = 0, size=5 ,color=cbPalette[6] ) 
+
+  
+dev.off()
+
+```
+
+
+
+
+
+### 3) Age classes, ~Duration
+<!-- (originally in manuscript, shows persistency) -->
+#### model output
+```{r single models}
+
+#1) Significant effect of the mean effect size per age class?
+RMADur_Age_Class<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Dur_Age_Class)
+summary(RMADur_Age_Class)
+
+
+
+#2) Effect sizes per age class significantly different from zero??
+RMADur_Age_Class_sign_zero<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~ -1+ Dur_Age_Class ) 
+summary(RMADur_Age_Class_sign_zero)
+#all has Hedges SMD ER sign diff from zero
+
+
+#3) Effect over time differs between age classes? 
+RMADur_Age_Class_Duration<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~Dur_Age_Class:Duration)
+
+```
+
+#### posthoc: differences between age classes?
+<!-- Even though the model is not significant, this is interesting to show that the difference lies between age class 1 and the others. -->
+
+```{r}
+
+summary(RMADur_Age_Class)
+coef(RMADur_Age_Class)
+
+summary(glht(RMADur_Age_Class, linfct=cbind(contrMat(c("Dur_Age_Class1"=1,"Dur_Age_Class2"=1,"Dur_Age_Class3"=1,"Dur_Age_Class4"=1), type="Tukey")), df=df.residual(RMADur_Age_Class)), test=adjusted("none"))
+```
+
+#### pseudoR² 
+```{r function R²}
+r2_rma.mv<-function(model, null.model) { 
+
+r2.sigma <- (sum(null.model$sigma2) - sum(model$sigma2)) / sum(null.model$sigma2)
+r2.loglik <- 1 - (logLik(model) / logLik(null.model))
+return(cbind(r2.sigma,r2.loglik))
+
+}
+```
+
+```{r Pseudo R² posthoc}
+
+#Dur_Age_Class
+subset<-df %>% filter(!is.na(Dur_Age_Class))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMADur_Age_Class_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ Dur_Age_Class, method="ML")
+
+null.model<-RMAnull
+model<-RMADur_Age_Class_ml
+r2_Dur_Age_Class<-r2_rma.mv(model, null.model) 
+r2_Dur_Age_Class #r2.loglik = used in manuscript
+
+
+
+# RMADur_Age_Class_sign_zero
+subset<-df %>% filter(!is.na(Dur_Age_Class))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMADur_Age_Class_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ -1+Dur_Age_Class, method="ML")
+
+null.model<-RMAnull
+model<-RMADur_Age_Class_ml
+r2_Dur_Age_Class<-r2_rma.mv(model, null.model) 
+r2_Dur_Age_Class #r2.loglik = used in manuscript
+
+```
+
+#### model validation
+```{r model validation}
+
+
+#Dur_Age_Class
+Err<-resid(RMADur_Age_Class) 
+Fit<-fitted(RMADur_Age_Class) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMADur_Age_Class - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD") #normality?
+qqnorm(Err, ylab="residuals SMD", xlab="scores") 
+# profile.rma.mv(RMADur_Age_Class)
+# Residuals vs explanatory 
+plot(x=df$Dur_Age_Class, y=Err, xlab="Dur_Age_Class", ylab="Residuals")
+
+
+```
+
+#### effect plot
+
+```{r}
+#Dur_Age_Class
+# easy approach of using model with removal of intercept!
+
+Dur_AC1_mean<-RMADur_Age_Class_sign_zero$beta[[1]] 
+Dur_AC2_mean<-RMADur_Age_Class_sign_zero$beta[[2]] 
+Dur_AC3_mean<-RMADur_Age_Class_sign_zero$beta[[3]] 
+Dur_AC4_mean<-RMADur_Age_Class_sign_zero$beta[[4]] 
+
+
+Dur_AC1_lower<-RMADur_Age_Class_sign_zero$ci.lb[[1]] 
+Dur_AC2_lower<-RMADur_Age_Class_sign_zero$ci.lb[[2]] 
+Dur_AC3_lower<-RMADur_Age_Class_sign_zero$ci.lb[[3]] 
+Dur_AC4_lower<-RMADur_Age_Class_sign_zero$ci.lb[[4]] 
+
+
+Dur_AC1_upper<-RMADur_Age_Class_sign_zero$ci.ub[[1]] 
+Dur_AC2_upper<-RMADur_Age_Class_sign_zero$ci.ub[[2]] 
+Dur_AC3_upper<-RMADur_Age_Class_sign_zero$ci.ub[[3]] 
+Dur_AC4_upper<-RMADur_Age_Class_sign_zero$ci.ub[[4]] 
+
+
+# Plotting mean with standard errors (confidence intervals): store them in dfs
+
+d=data.frame(Dur_Age_Class=c("[0-5) yrs","[5-10) yrs","[10-15) yrs", ">=15 yrs"),
+             mean=c(Dur_AC1_mean,Dur_AC2_mean,Dur_AC3_mean,Dur_AC4_mean),
+             lower=c(Dur_AC1_lower,Dur_AC2_lower,Dur_AC3_lower,Dur_AC4_lower),
+             upper=c(Dur_AC1_upper,Dur_AC2_upper,Dur_AC3_upper,Dur_AC4_upper))
+
+
+ # Put the full names in the SMD df to get them to link model output classes with the actual data classes
+ levels(df$Dur_Age_Class) <- c("[0-5) yrs","[5-10) yrs","[10-15) yrs", ">=15 yrs")
+ 
+
+ 
+ #model for Qm
+ 
+model<-rma.mv(Hedges_SMD,
+                       Hedges_SMD_VARIANCE,
+                       data=df,
+                       random = list(~ 1 | Exp_ID/Observation_ID, ~ Year | Exp_ID),
+                       struct="CAR",
+                       mods= ~   Dur_Age_Class  )
+ 
+Qm<-model$QM
+p<-model$QMp
+N<-model$k
+
+
+#Model output to add to the figure as label
+  eqn <- sprintf(
+    "italic(Qm) ~ '=' ~ %.2g * ',' ~~ italic(p) ~ '=' ~ %.1g * ',' ~~ italic(N) == %.0f",
+    Qm,
+    p,
+    N
+  )
+
+ 
+ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+ # 1 grijs 2 oranje 3 blauw 4 groen 5 geel 6 blauw 7 feloranje, 8 roze
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/#:~:text=Solution,not%20friendly%20for%20colorblind%20viewers.
+ 
+ 
+ 
+################
+ pdf("Fig_3_a_raw.pdf", width=14, height=10)
+ 
+#ACTUAL DATA
+ggplot() +
+geom_violin(df, mapping=aes(Dur_Age_Class, Hedges_SMD, alpha=0.5)) +
+geom_jitter(df, mapping=aes(Dur_Age_Class, Hedges_SMD),size=(1/sqrt(df$Hedges_SMD_VARIANCE)), shape=21, fill=cbPalette[1])+
+
+#MODEL RESULTS
+  geom_point(data=d, mapping=aes(x=Dur_Age_Class, y=mean), size=5, shape=21, fill=cbPalette[6], colour=cbPalette[6]) +
+  guides(fill="none")+guides(alpha="none")+
+  geom_errorbar(data=d, mapping=aes(x=Dur_Age_Class, ymin=upper, ymax=lower), width=0.3, size=1.2, color=cbPalette[6]) +  #the estimates of the model + error bars
+  
+#FORMATTING
+  # ggtitle("Dur_Age_Class (Mean SMD_sub + 95%-CI)") +
+  ylab("ER Hedges SMD") +
+  xlab("Duration")+
+  geom_hline(yintercept=0.8, linetype="dashed", color = cbPalette[7], size=0.6)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = cbPalette[2], size=0.6)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = cbPalette[5], size=0.6)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = cbPalette[3], size=0.6)+   
+  geom_hline(yintercept=-0.8, linetype="dashed", color = cbPalette[6], size=0.6)+
+  
+  geom_vline(xintercept=1.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_vline(xintercept=2.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+  geom_vline(xintercept=3.5, linetype="dashed", color = cbPalette[1], size=0.6)+
+
+  theme_classic()+
+  scale_y_continuous(limits = c(-1.4,2.25), breaks=c(-2,-1,0,1,2,3))+
+  theme(text = element_text(size = 22), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"),axis.text=element_text(size=rel(1.1))) +
+  # annotate("text", x=4, y=-1.4, label= "Qm=5.8, p-val=0.12ns", size=8)
+  annotate("text",  x = 0.6, y =-1.2, label = eqn, parse = TRUE, hjust = 0, size=5,color=cbPalette[6]  )
+
+dev.off()
+
+# RMADur_Age_Class
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

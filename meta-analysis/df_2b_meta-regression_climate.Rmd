@@ -1,0 +1,402 @@
+----
+title: "meta-regression_climate"
+output:
+  html_document:
+    df_print: paged
+editor_options: 
+  chunk_output_type: inline
+---
+
+#load data
+```{r load data, include=FALSE}
+library("ggplot2")
+library("plyr")
+library("dplyr")
+library("car")
+library("tidyr")
+library("readxl")
+library("reshape2")
+library("tidyverse")
+library("ggrepel")
+library("tibble")
+library("ggforce")
+library("lubridate")
+library("esc")
+library("effsize")
+library("nlme") 
+library("metafor")
+library("corrplot")
+
+df<-read.csv("df_2.csv")
+df_AT<-read.csv("SMDAT.csv")
+df_ST<-read.csv("SMDST.csv")
+df_SM<-read.csv("SMDSM.csv")
+
+#rename
+df<-plyr::rename(df,c("ï..Dataset_ID"="Dataset_ID"))
+
+df_AT<-plyr::rename(df_AT,c("X"="Observation_ID"))
+df_ST<-plyr::rename(df_ST,c("X"="Observation_ID"))
+df_SM<-plyr::rename(df_SM,c("X"="Observation_ID"))
+
+#change data types
+df$Dataset_ID<-as.factor(df$Dataset_ID)
+df_AT$Dataset_ID<-as.factor(df_AT$Dataset_ID)
+df_ST$Dataset_ID<-as.factor(df_ST$Dataset_ID)
+df_SM$Dataset_ID<-as.factor(df_SM$Dataset_ID)
+df$Exp_ID<-as.factor(df$Exp_ID)
+df$Site<-as.factor(df$Site)
+df$Location<-as.factor(df$Location)
+df$Country<-as.factor(df$Country)
+
+```
+
+#data check
+##numbers
+```{r data check, echo=FALSE}
+# df$SMD_AT[!is.na(df$SMD_AT)] 
+# df$SMD_ST[!is.na(df$SMD_ST)]
+# df$SMD_SM[!is.na(df$SMD_SM)]
+```
+
+##distribution
+```{r B Distribution: histograms, echo=FALSE}
+tempAT<-df[-which(is.na(df$SMD_AT)),]
+tempST<-df[-which(is.na(df$SMD_ST)),]
+tempSM<-df[-which(is.na(df$SMD_SM)),]
+
+hist(tempAT$SMD_AT, xlab="SMD_AT", ylab="Nr of Datasets", xlim=c(min(tempAT$SMD_AT)-2,max(tempAT$SMD_AT)+2))
+hist(tempST$SMD_ST, xlab="SMD_ST", ylab="Nr of Datasets", xlim=c(min(tempST$SMD_ST)-2,max(tempST$SMD_ST)+2))
+hist(tempSM$SMD_SM, xlab="SMD_SM", ylab="Nr of Datasets", xlim=c(min(tempSM$SMD_SM)-2,max(tempSM$SMD_SM)+2))
+```
+
+##correlation
+
+```{r correlation, echo=FALSE}
+
+dfcor<-df[ , which(names(df) %in% c("SMD_AT", "SMD_ST", "SMD_SM"))]
+cor<- cor(dfcor, use="pairwise.complete.obs")
+cor
+
+dfcor2<-df[ , which(names(df) %in% c("Hedges_SMD","SMD_AT", "SMD_ST", "SMD_SM"))] 
+cor2 <- cor(dfcor2, use="pairwise.complete.obs")
+cor2
+
+par(mfrow=c(1,2))
+corrplot.mixed(cor, main="Continuous drivers") 
+corrplot.mixed(cor2, tl.cex=0.7, main="Continuous drivers and response")
+```
+
+
+##effect of OTC
+###Hedges 
+####Air temp AT
+```{r Air temp AT, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_AT <- df_AT %>% inner_join(dfsub, by="Dataset_ID")
+
+model1 <- rma.mv(Hedges_SMDAT, Hedges_SMDAT_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_AT)
+summary(model1)
+
+```
+
+####Soil temp ST
+```{r Air temp ST, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_ST <- df_ST %>% inner_join(dfsub, by="Dataset_ID")
+
+model2 <- rma.mv(Hedges_SMDST, Hedges_SMDST_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_ST)
+summary(model2)
+
+```
+
+####Soil moist SM
+```{r Soil moist SM, echo=FALSE}
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SM <- df_SM %>% inner_join(dfsub, by="Dataset_ID")
+
+model3 <- rma.mv(Hedges_SMDSM, Hedges_SMDSM_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SM)
+summary(model3)
+
+```
+
+####calculate I²
+
+```{r}
+# https://www.metafor-project.org/doku.php/tips:i2_multilevel_multivariate#multilevel_models
+# MULTILEVEL MODELS
+
+
+#### model1 ####
+W <- diag(1/model1$vi)
+X <- model.matrix(model1)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model1$sigma2) / (sum(model1$sigma2) + (model1$k-model1$p)/sum(diag(P)))
+100 * model1$sigma2 / (sum(model1$sigma2) + (model1$k-model1$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+
+
+#### model2 ####
+W <- diag(1/model2$vi)
+X <- model.matrix(model2)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model2$sigma2) / (sum(model2$sigma2) + (model2$k-model2$p)/sum(diag(P)))
+100 * model2$sigma2 / (sum(model2$sigma2) + (model2$k-model2$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+
+#### model3 ####
+W <- diag(1/model3$vi)
+X <- model.matrix(model3)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model3$sigma2) / (sum(model3$sigma2) + (model3$k-model3$p)/sum(diag(P)))
+100 * model3$sigma2 / (sum(model3$sigma2) + (model3$k-model3$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+```
+
+
+
+
+###RMD 
+####Air temp AT
+```{r Air temp AT, echo=FALSE}
+
+# First run full script df_1b to get the csv files
+df_AT_RMD<-read.csv("RMDAT.csv")
+df_AT_RMD<-plyr::rename(df_AT_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_AT_RMD <- df_AT_RMD %>% inner_join(dfsub, by="Dataset_ID")
+
+model1_RMD <- rma.mv(RMDAT, RMDAT_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_AT_RMD)
+summary(model1_RMD)
+
+```
+
+####Soil temp ST
+```{r Air temp ST, echo=FALSE}
+
+# First run full script df_1b to get the csv files
+df_ST_RMD<-read.csv("RMDST.csv")
+df_ST_RMD<-plyr::rename(df_ST_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_ST_RMD <- df_ST_RMD %>% inner_join(dfsub, by="Dataset_ID")
+
+model1_RMD <- rma.mv(RMDST, RMDST_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_ST_RMD)
+summary(model1_RMD)
+
+
+```
+
+####Soil moist SM
+```{r Soil moist SM, echo=FALSE}
+
+# First run full script df_1b to get the csv files
+df_SM_RMD<-read.csv("RMDSM.csv")
+df_SM_RMD<-plyr::rename(df_SM_RMD,c("X"="Observation_ID"))
+
+#link the expid and year
+dfsub<-df[ , which(names(df) %in% c("Dataset_ID", "Exp_ID", "Year"))]
+df_SM_RMD <- df_SM_RMD %>% inner_join(dfsub, by="Dataset_ID")
+
+model1_RMD <- rma.mv(RMDSM, RMDSM_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df_SM_RMD)
+summary(model1_RMD)
+
+```
+
+
+#metaregression
+##model output
+```{r single models AT, ST, SM, echo=FALSE}
+
+RMAAT<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_AT)
+#Extra optimizer argument added to fix convergence error
+summary(RMAAT)
+
+
+
+RMAST<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_ST)
+summary(RMAST)
+
+
+
+RMASM<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_SM)
+summary(RMASM)
+
+```
+##pseudoR² 
+```{r function R², echo=FALSE}
+r2_rma.mv<-function(model, null.model) { 
+
+r2.sigma <- (sum(null.model$sigma2) - sum(model$sigma2)) / sum(null.model$sigma2)
+r2.loglik <- 1 - (logLik(model) / logLik(null.model))
+return(cbind(r2.sigma,r2.loglik))
+
+}
+```
+
+```{r Pseudo R² posthoc, echo=FALSE}
+
+#AT
+subset<-df %>% filter(!is.na(SMD_AT))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMAAT_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_AT, method="ML")
+
+null.model<-RMAnull
+model<-RMAAT_ml
+r2_AT<-r2_rma.mv(model, null.model) 
+r2_AT #r2.loglik = used in manuscript
+
+
+
+
+#ST
+subset<-df %>% filter(!is.na(SMD_ST))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMAST_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_ST, method="ML")
+
+null.model<-RMAnull
+model<-RMAST_ml
+r2_ST<-r2_rma.mv(model, null.model) 
+r2_ST #r2.loglik = used in manuscript
+
+
+
+
+
+
+#SM
+subset<-df %>% filter(!is.na(SMD_SM))
+Observation_ID_subset<-1:nrow(subset)
+RMAnull<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ 1, method="ML") 
+RMASM_ml<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=subset, random=list(~ 1 |  Exp_ID / Observation_ID_subset , ~ Year |  Exp_ID ), struct="CAR", mods=~ SMD_SM, method="ML")
+
+null.model<-RMAnull
+model<-RMASM_ml
+r2_SM<-r2_rma.mv(model, null.model) 
+r2_SM #r2.loglik = used in manuscript
+ 
+
+```
+
+##model validation
+```{r model validation, echo=FALSE}
+
+#AT
+Err<-resid(RMAAT) 
+Fit<-fitted(RMAAT) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAAT - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD AT") #normality?
+qqnorm(Err, ylab="residuals SMD AT", xlab="scores") 
+# profile.rma.mv(RMAAT)
+# Residuals vs explanatory 
+plot(x=df_AT$Hedges_SMDAT, y=Err, xlab="SMD_AT", ylab="Residuals")
+
+
+
+
+
+#ST
+Err<-resid(RMAST) 
+Fit<-fitted(RMAST) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMAST - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD ST") #normality?
+qqnorm(Err, ylab="residuals SMD ST", xlab="scores") 
+# profile.rma.mv(RMAST)
+# Residuals vs explanatory 
+plot(x=df_ST$Hedges_SMDST, y=Err, xlab="SMD_ST", ylab="Residuals")
+
+
+
+
+
+#SM
+Err<-resid(RMASM) 
+Fit<-fitted(RMASM) 
+# Residuals vs fitted
+plot(x=Fit, y=Err, xlab="fitted values", ylab="residuals", main="RMASM - Residuals vs fitted SMD")
+#Normality of fitted and residuals
+hist(Fit, main="Histogram fitted values SMD SM") #normality?
+qqnorm(Err, ylab="residuals SMD SM", xlab="scores") 
+# profile.rma.mv(RMASM)
+# Residuals vs explanatory 
+plot(x=df_SM$Hedges_SMDSM, y=Err, xlab="SMD_SM", ylab="Residuals")
+
+
+
+
+
+```
+
+##calculate I²
+```{r}
+# https://www.metafor-project.org/doku.php/tips:i2_multilevel_multivariate#multilevel_models
+# Jackson et al 2012 approach
+
+#### AT ####
+
+RMAAT.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_AT)
+RMAAT.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_AT)
+
+c(100 * (vcov(RMAAT.R)[1,1] - vcov(RMAAT.F)[1,1]) / vcov(RMAAT.R)[1,1],
+  100 * (vcov(RMAAT.R)[2,2] - vcov(RMAAT.F)[2,2]) / vcov(RMAAT.R)[2,2])
+
+#### ST ####
+
+RMAST.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_ST)
+RMAST.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_ST)
+
+c(100 * (vcov(RMAST.R)[1,1] - vcov(RMAST.F)[1,1]) / vcov(RMAST.R)[1,1],
+  100 * (vcov(RMAST.R)[2,2] - vcov(RMAST.F)[2,2]) / vcov(RMAST.R)[2,2])
+
+
+#### SM ####
+RMASM.R<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", mods=~SMD_SM)
+RMASM.F<-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data=df, mods=~SMD_SM)
+
+
+c(100 * (vcov(RMASM.R)[1,1] - vcov(RMASM.F)[1,1]) / vcov(RMASM.R)[1,1],
+  100 * (vcov(RMASM.R)[2,2] - vcov(RMASM.F)[2,2]) / vcov(RMASM.R)[2,2])
+
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+```
+
+##effect plots
+
+```{r effect plots}
+
+regplot.rma(RMAAT, mod="SMD_AT", xlab="SMD_AT", ylab="SMD")
+
+regplot.rma(RMAST, mod="SMD_ST", xlab="SMD_ST", ylab="SMD")
+
+regplot.rma(RMASM, mod="SMD_SM", xlab="SMD_SM", ylab="Raw SMD")
+
+```
+
+

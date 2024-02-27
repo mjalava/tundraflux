@@ -1,0 +1,361 @@
+---
+title: "ER partitioning MA"
+author: "Sarah Schwieger"
+date: "2023-04-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(metafor) # calculate effect size and do meta analysis
+library(lmtest)
+library(readr) # read in data
+library(dplyr)# handle data
+
+# load ER partitioning data
+data <- read_csv("df_3.csv")
+data$treatment<-as.factor(data$treatment)
+
+# subset GS data
+data <- subset(data, season_automatic == "GS" & c_loss=="CO2", )
+data <- subset(data, site_id_automatic != "CAN_2" & site_id_automatic != "CAN_3" & site_id_automatic != "CAN_4" & site_id_automatic != "SWE_12", )
+
+# count number of missing values in each column
+missing_cols <- colSums(is.na(data))
+# subset dataset to remove columns with only missing values
+ER_data <- subset(data, select = -which(missing_cols == nrow(data)))
+```
+
+
+```{r prepare data for effect sizes - heterotrophic respiration}
+
+# merge site_id_automatic and flux_year_automatic
+ER_data$ID <- paste(ER_data$site_id_automatic,ER_data$flux_year_automatic, sep="_")
+ER_data$ID <- as.factor(ER_data$ID)
+
+# observations within an ID (site_id + year)
+obs_id<-ER_data %>% 
+  group_by(site_id_automatic, treatment) %>%
+  dplyr::count(ID) 
+
+#extract heterotrophic respiration
+ER_hr <- ER_data %>% 
+  group_by(ID, treatment) %>% 
+  dplyr::summarize(mean=mean(co2_heterotrophic_respiration, na.rm = TRUE), 
+            sd=sd(co2_heterotrophic_respiration, na.rm = TRUE), 
+            n=n()
+            )
+
+ER_CTL <- ER_hr  %>% dplyr::filter(treatment=="CTL")
+ER_OTC <- ER_hr  %>% dplyr::filter(treatment=="OTC")
+ER_hr <- full_join(ER_CTL, ER_OTC, by="ID")
+
+ER_hr<-plyr::rename(ER_hr,c("mean.x"="mean_CTL_hr"))
+ER_hr<-plyr::rename(ER_hr,c("mean.y"="mean_OTC_hr"))
+ER_hr<-plyr::rename(ER_hr,c("sd.x"="sd_CTL_hr"))
+ER_hr<-plyr::rename(ER_hr,c("sd.y"="sd_OTC_hr"))
+ER_hr<-plyr::rename(ER_hr,c("n.x"="n_CTL_hr"))
+ER_hr<-plyr::rename(ER_hr,c("n.y"="n_OTC_hr"))
+```
+
+```{r calculate effect sizes - heterotrophic respiration, echo=FALSE}
+
+# calculate Hedges SMD
+SMD_hr <- escalc("SMD",       m1i = mean_OTC_hr,
+                           n1i = n_OTC_hr,
+                          sd1i = sd_OTC_hr,
+                           m2i = mean_CTL_hr,
+                           n2i = n_CTL_hr,
+                          sd2i = sd_CTL_hr,
+                          data = ER_hr
+)
+
+Mean_SMD<-mean(SMD_hr$yi, na.rm = TRUE)
+
+SMD_hr<-plyr::rename(SMD_hr,c("yi"="SMD_HR"))
+SMD_hr<-plyr::rename(SMD_hr,c("vi"="var_SMD_HR"))
+
+# calculate log response ratio 
+# For measure="ROM", the log is taken of the ratio of means (i.e., log(m1i/m2i))
+ROM_hr <-
+  escalc("ROM", m1i = mean_OTC_hr,
+         n1i = n_OTC_hr,
+         sd1i = sd_OTC_hr,
+         m2i = mean_CTL_hr,
+         n2i = n_CTL_hr,
+         sd2i = sd_CTL_hr,
+         data = ER_hr 
+  )
+
+Mean_RR<-mean(ROM_hr$yi, na.rm = TRUE)
+
+ROM_hr<-plyr::rename(ROM_hr,c("yi"="ROM_HR"))
+ROM_hr<-plyr::rename(ROM_hr,c("vi"="var_ROM_HR"))
+```
+
+```{r merge data - heterotrophic respiration}
+#build data frame for meta analysis
+effect <- full_join(SMD_hr, ROM_hr, by = "ID")
+meta_effect <- left_join(effect, ER_data, by="ID")
+ER_meta <- meta_effect %>% distinct(ID, .keep_all = TRUE)
+
+#clean
+
+ER_meta$treatment.x.x <- NULL
+ER_meta$treatment.y.x <- NULL
+names(ER_meta)[2] <- "mean_CTL_hr"
+names(ER_meta)[3] <- "sd_CTL_hr"
+names(ER_meta)[4] <- "n_CTL_hr"
+names(ER_meta)[5] <- "mean_OTC_hr"
+names(ER_meta)[6] <- "sd_OTC_hr"
+names(ER_meta)[7] <- "n_OTC_hr"
+ER_meta <- ER_meta[,-10:-17] 
+
+```
+
+
+```{r same for ecosystem respiration}
+# extract Ecosystem respiration
+ER_er <- ER_data %>% 
+  group_by(ID, treatment) %>% 
+  dplyr::summarize(mean=mean(co2_ecosystem_respiration, na.rm = TRUE), 
+            sd=sd(co2_ecosystem_respiration, na.rm = TRUE), 
+            n=n()
+            )
+
+ER_CTL <- ER_er  %>% dplyr::filter(treatment=="CTL")
+ER_OTC <- ER_er  %>% dplyr::filter(treatment=="OTC")
+ER_er <- full_join(ER_CTL, ER_OTC, by="ID")
+
+ER_er<-plyr::rename(ER_er,c("mean.x"="mean_CTL_er"))
+ER_er<-plyr::rename(ER_er,c("mean.y"="mean_OTC_er"))
+ER_er<-plyr::rename(ER_er,c("sd.x"="sd_CTL_er"))
+ER_er<-plyr::rename(ER_er,c("sd.y"="sd_OTC_er"))
+ER_er<-plyr::rename(ER_er,c("n.x"="n_CTL_er"))
+ER_er<-plyr::rename(ER_er,c("n.y"="n_OTC_er"))
+
+
+# calculate Hedges SMD
+SMD_er <- escalc("SMD",       m1i = mean_OTC_er,
+                           n1i = n_OTC_er,
+                          sd1i = sd_OTC_er,
+                           m2i = mean_CTL_er,
+                           n2i = n_CTL_er,
+                          sd2i = sd_CTL_er,
+                          data = ER_er
+)
+
+Mean_SMD<-mean(SMD_er$yi, na.rm = TRUE)
+
+SMD_er<-plyr::rename(SMD_er,c("yi"="SMD_ER"))
+SMD_er<-plyr::rename(SMD_er,c("vi"="var_SMD_ER"))
+
+# calculate log response ratio 
+
+ROM_er <-
+  escalc("ROM", m1i = mean_OTC_er,
+         n1i = n_OTC_er,
+         sd1i = sd_OTC_er,
+         m2i = mean_CTL_er,
+         n2i = n_CTL_er,
+         sd2i = sd_CTL_er,
+         data = ER_er 
+  )
+
+Mean_RR<-mean(ROM_er$yi, na.rm = TRUE)
+
+ROM_er<-plyr::rename(ROM_er,c("yi"="ROM_ER"))
+ROM_er<-plyr::rename(ROM_er,c("vi"="var_ROM_ER"))
+
+effect2 <- full_join(SMD_er, ROM_er, by = "ID")
+meta_effect2 <- left_join(effect2, ER_data, by="ID")
+ER_meta2 <- meta_effect2 %>% distinct(ID, .keep_all = TRUE)
+
+#clean
+
+ER_meta2$treatment.x.x <- NULL
+ER_meta2$treatment.y.x <- NULL
+names(ER_meta2)[2] <- "mean_CTL_er"
+names(ER_meta2)[3] <- "sd_CTL_er"
+names(ER_meta2)[4] <- "n_CTL_er"
+names(ER_meta2)[5] <- "mean_OTC_er"
+names(ER_meta2)[6] <- "sd_OTC_er"
+names(ER_meta2)[7] <- "n_OTC_er"
+ER_meta2 <- ER_meta2[,-10:-17] 
+
+```
+```{r calculate Heterotrophic/Ecosystems respiration ratio}
+
+# calculate
+
+ER_data$ratio_HR_ER <-(ER_data$co2_heterotrophic_respiration/ER_data$co2_ecosystem_respiration)*100
+dat_he <- ER_data[complete.cases(ER_data$ratio_HR_ER), ]
+dat_he_sum<-summarySE(dat_he, measurevar = "ratio_HR_ER",  na.rm = TRUE, conf.interval = 0.95, .drop = TRUE)#groupvars = c("Growth.form_2"),
+
+#extract values from data file
+ER_he <- ER_data %>% 
+  group_by(ID, treatment) %>% 
+  dplyr::summarize(mean=mean(ratio_HR_ER, na.rm = TRUE), 
+            sd=sd(ratio_HR_ER, na.rm = TRUE), 
+            n=n()
+            )
+ER_CTL <- ER_he  %>% dplyr::filter(treatment=="CTL")
+ER_OTC <- ER_he  %>% dplyr::filter(treatment=="OTC")
+ER_he <- full_join(ER_CTL, ER_OTC, by="ID")
+
+ER_he<-plyr::rename(ER_he,c("mean.x"="mean_CTL_he"))
+ER_he<-plyr::rename(ER_he,c("mean.y"="mean_OTC_he"))
+ER_he<-plyr::rename(ER_he,c("sd.x"="sd_CTL_he"))
+ER_he<-plyr::rename(ER_he,c("sd.y"="sd_OTC_he"))
+ER_he<-plyr::rename(ER_he,c("n.x"="n_CTL_he"))
+ER_he<-plyr::rename(ER_he,c("n.y"="n_OTC_he"))
+
+# calculate Hedges SMD
+SMD_he <- escalc("SMD",       m1i = mean_OTC_he,
+                           n1i = n_OTC_he,
+                          sd1i = sd_OTC_he,
+                           m2i = mean_CTL_he,
+                           n2i = n_CTL_he,
+                          sd2i = sd_CTL_he,
+                          data = ER_he
+)
+
+Mean_SMD<-mean(SMD_he$yi, na.rm = TRUE)
+
+SMD_he<-plyr::rename(SMD_he,c("yi"="SMD_HE"))
+SMD_he<-plyr::rename(SMD_he,c("vi"="var_SMD_HE"))
+
+# calculate log response ratio 
+
+ROM_he <-
+  escalc("ROM", m1i = mean_OTC_he,
+         n1i = n_OTC_he,
+         sd1i = sd_OTC_he,
+         m2i = mean_CTL_he,
+         n2i = n_CTL_he,
+         sd2i = sd_CTL_he,
+         data = ER_he 
+  )
+
+Mean_RR<-mean(ROM_he$yi, na.rm = TRUE)
+
+ROM_he<-plyr::rename(ROM_he,c("yi"="ROM_HE"))
+ROM_he<-plyr::rename(ROM_he,c("vi"="var_ROM_HE"))
+
+# RR = exp(ROM)
+# percchange = 100*(RR-1)
+
+# Example: ROM=logRR=0.21835 --> RR=1.244 --> %change=24.4
+#ROM_he$RR_he =exp(ROM_he$ROM_HE)
+
+effect3 <- full_join(SMD_he, ROM_he, by = "ID")
+meta_effect3 <- left_join(effect3, ER_data, by="ID")
+ER_meta3 <- meta_effect3 %>% distinct(ID, .keep_all = TRUE)
+
+#clean
+
+ER_meta3$treatment.x.x <- NULL
+ER_meta3$treatment.y.x <- NULL
+names(ER_meta3)[2] <- "mean_CTL_he"
+names(ER_meta3)[3] <- "sd_CTL_he"
+names(ER_meta3)[4] <- "n_CTL_he"
+names(ER_meta3)[5] <- "mean_OTC_he"
+names(ER_meta3)[6] <- "sd_OTC_he"
+names(ER_meta3)[7] <- "n_OTC_he"
+ER_meta3 <- ER_meta3[,-10:-17] 
+
+
+```
+```{r same for autotrophic respiration}
+#calculate
+ER_data$auto_resp <-ER_data$co2_ecosystem_respiration-ER_data$co2_heterotrophic_respiration
+
+ER_data$ratio_AU_ER <-(ER_data$auto_resp/ER_data$co2_ecosystem_respiration)*100
+dat_au <- ER_data[complete.cases(ER_data$ratio_AU_ER), ]
+dat_au_sum<-summarySE(dat_au, measurevar = "ratio_AU_ER",  na.rm = TRUE, conf.interval = 0.95, .drop = TRUE)#groupvars = c("Growth.form_2"),
+
+#extract calculated autotrophic respiration
+ER_au <- ER_data %>%
+  group_by(ID, treatment) %>%
+  dplyr::summarize(mean = mean(auto_resp, na.rm = TRUE),
+                   sd = sd(auto_resp, na.rm = TRUE),
+                   n = n())
+
+# # extract autotrophic respiration
+# ER_au <- ER_data %>%
+#   group_by(ID, treatment) %>%
+#   dplyr::summarize(mean=mean(co2_autotrophic_respiration, na.rm = TRUE),
+#             sd=sd(co2_autotrophic_respiration, na.rm = TRUE),
+#             n=n()
+#             )
+
+ER_CTL <- ER_au  %>% dplyr::filter(treatment=="CTL")
+ER_OTC <- ER_au  %>% dplyr::filter(treatment=="OTC")
+ER_au <- full_join(ER_CTL, ER_OTC, by="ID")
+
+ER_au<-plyr::rename(ER_au,c("mean.x"="mean_CTL_au"))
+ER_au<-plyr::rename(ER_au,c("mean.y"="mean_OTC_au"))
+ER_au<-plyr::rename(ER_au,c("sd.x"="sd_CTL_au"))
+ER_au<-plyr::rename(ER_au,c("sd.y"="sd_OTC_au"))
+ER_au<-plyr::rename(ER_au,c("n.x"="n_CTL_au"))
+ER_au<-plyr::rename(ER_au,c("n.y"="n_OTC_au"))
+
+# calculate Hedges SMD
+SMD_au <- escalc("SMD",       m1i = mean_OTC_au,
+                           n1i = n_OTC_au,
+                          sd1i = sd_OTC_au,
+                           m2i = mean_CTL_au,
+                           n2i = n_CTL_au,
+                          sd2i = sd_CTL_au,
+                          data = ER_au
+)
+
+Mean_SMD<-mean(SMD_au$yi, na.rm = TRUE)
+
+SMD_au<-plyr::rename(SMD_au,c("yi"="SMD_AU"))
+SMD_au<-plyr::rename(SMD_au,c("vi"="var_SMD_AU"))
+
+# calculate log response ratio 
+
+ROM_au <-
+  escalc("ROM", m1i = mean_OTC_au,
+         n1i = n_OTC_au,
+         sd1i = sd_OTC_au,
+         m2i = mean_CTL_au,
+         n2i = n_CTL_au,
+         sd2i = sd_CTL_au,
+         data = ER_au 
+  )
+
+Mean_RR<-mean(ROM_au$yi, na.rm = TRUE)
+
+ROM_au<-plyr::rename(ROM_au,c("yi"="ROM_AU"))
+ROM_au<-plyr::rename(ROM_au,c("vi"="var_ROM_AU"))
+
+effect1 <- full_join(SMD_au, ROM_au, by = "ID")
+meta_effect1 <- left_join(effect1, ER_data, by="ID")
+ER_meta1 <- meta_effect1 %>% distinct(ID, .keep_all = TRUE)
+
+#clean
+
+ER_meta1$treatment.x.x <- NULL
+ER_meta1$treatment.y.x <- NULL
+names(ER_meta1)[2] <- "mean_CTL_au"
+names(ER_meta1)[3] <- "sd_CTL_au"
+names(ER_meta1)[4] <- "n_CTL_au"
+names(ER_meta1)[5] <- "mean_OTC_au"
+names(ER_meta1)[6] <- "sd_OTC_au"
+names(ER_meta1)[7] <- "n_OTC_au"
+ER_meta1 <- ER_meta1[,-10:-17] 
+
+```
+
+```{r merge all datasets for analysis}
+
+df<-cbind(ER_meta, ER_meta1[2:11])
+df2<-cbind(df, ER_meta2[2:11])
+df_meta<-cbind(df2, ER_meta3[2:11])
+
+write.csv(df_meta,"df_4.csv")
+
+```
+

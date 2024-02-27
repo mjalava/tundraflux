@@ -1,0 +1,386 @@
+---
+title: "Meta-analysis"
+output:
+  html_document:
+    df_print: paged
+editor_options: 
+  chunk_output_type: inline
+---
+
+#load data
+```{r load data, include=FALSE}
+library("ggplot2")
+library("plyr")
+library("dplyr")
+library("car")
+library("tidyr")
+library("readxl")
+library("reshape2")
+library("tidyverse")
+library("ggrepel")
+library("tibble")
+library("ggforce")
+library("lubridate")
+library("esc")
+library("effsize")
+library("nlme") 
+library("metafor")
+
+df<-read.csv("df_2.csv")
+
+#rename
+df<-plyr::rename(df,c("ï..Dataset_ID"="Dataset_ID"))
+
+#change data types
+df$Dataset_ID<-as.factor(df$Dataset_ID)
+df$Exp_ID<-as.factor(df$Exp_ID)
+df$Site<-as.factor(df$Site)
+df$Location<-as.factor(df$Location)
+df$Country<-as.factor(df$Country)
+
+
+```
+
+
+#meta-analysis
+##model output
+###Hedges SMD
+```{r model output Hedges, echo=FALSE,warning=FALSE}
+ 
+#reorder Exp_ID alphabetically - then numerically
+df$Exp_ID = factor(df$Exp_ID,levels(df$Exp_ID)[c(1:26, 30:33, 27:29, 34:46, 51:56, 47:50)])
+#doublecheck
+# levels(df$Exp_ID)
+# levels(df$Dataset_ID)
+
+#rearrange Dataset_ID similar
+df <- df   %>% arrange(Exp_ID)
+df$Dataset_ID<-as.factor(df$Dataset_ID)
+df$Dataset_ID <- fct_inorder(df$Dataset_ID)
+# levels(df$Dataset_ID)
+
+
+#model without CAR structure (temp autocorr)
+df$Year<-as.factor(df$Year)
+# str(df$Year)
+
+model1 <- rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, data = df, random= ~1 | Exp_ID/Year/Observation_ID)
+summary(model1)
+
+
+#model with CAR structure (temp autocorr)
+df$Year<-as.numeric(as.character(df$Year))
+# str(df$Year)
+
+model2 <- rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df)
+summary(model2)
+
+
+#comparison
+anova.rma(model2,model1)
+
+
+```
+
+###Ratio Of Means ROM
+```{r model output Hedges, echo=FALSE,warning=FALSE}
+#model without CAR structure (temp autocorr)
+df$Year<-as.factor(df$Year)
+# str(df$Year)
+
+model3 <- rma.mv(ROM, ROM_VARIANCE, data = df, random= ~1 | Exp_ID/Year/Observation_ID)
+summary(model3)
+
+
+#model with CAR structure (temp autocorr)
+df$Year<-as.numeric(as.character(df$Year))
+# str(df$Year)
+
+model4 <- rma.mv(ROM, ROM_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df)
+summary(model4)
+
+
+#comparison
+anova.rma(model4,model3)
+
+
+```
+###Perc Change
+```{r Perc change, echo=FALSE}
+# RR = exp(ROM)
+# percchange = 100*(RR-1)
+# Example: ROM=logRR=0.21835 --> RR=1.244 --> %change=24.4
+
+
+
+
+#ROM=log RR
+# (mean, lower, upper ci)
+(model4$b)
+(model4$ci.lb)
+(model4$ci.ub)
+
+#RR=exp(ROM)
+exp(model4$b)
+exp(model4$ci.lb)
+exp(model4$ci.ub)
+
+#%change=100*(RR-1)
+100*(exp(model4$b)-1)
+100*(exp(model4$ci.lb)-1)
+100*(exp(model4$ci.ub)-1)
+```
+
+
+##model validation
+```{r model2, echo=FALSE,warning=FALSE}
+
+#a) general checks
+
+funnel(model2, main="funnel plot Hedges SMD")
+
+funnel(model2, yaxis="seinv")
+
+# profile(model2, sigma2=1)
+
+qqnorm(resid(model2),    ylab="Standardized Residuals",  xlab="Normal Scores",    main="Metamodel Hedges SMD") 
+
+ranktest(model2, predictor = "sei")
+
+
+
+#b) did CAR structure improve the model, removing autocorrel?
+
+#method 1 - acf cholesky
+par(mfrow = c(1, 2))
+acf(resid(model1, type="cholesky")) #should show temporal AC
+acf(resid(model2, type="cholesky")) #should show decreased/no temporal AC
+
+#method 2 - anova comparison
+anova.rma(model2,model1) #significant improvement
+
+```
+
+
+```{r model4, echo=FALSE,warning=FALSE}
+
+#a) general checks
+
+funnel(model4, main="funnel plot Hedges SMD")
+
+funnel(model4, yaxis="seinv")
+
+# profile(model4, sigma2=1)
+
+qqnorm(resid(model4),    ylab="Standardized Residuals",  xlab="Normal Scores",    main="Metamodel Hedges SMD") 
+
+ranktest(model4, predictor = "sei")
+
+
+
+#b) did CAR structure improve the model, removing autocorrel?
+
+#method 1 - acf cholesky
+par(mfrow = c(1, 2))
+acf(resid(model1, type="cholesky")) #should show temporal AC
+acf(resid(model4, type="cholesky")) #should show decreased/no temporal AC
+
+#method 2 - anova comparison
+anova.rma(model4,model3) #significant improvement
+
+```
+
+
+##calculate I²
+```{r}
+# https://www.metafor-project.org/doku.php/tips:i2_multilevel_multivariate#multilevel_models
+# MULTILEVEL MODELS
+
+#### Hedges SMD ####
+W <- diag(1/model2$vi)
+X <- model.matrix(model2)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model2$sigma2) / (sum(model2$sigma2) + (model2$k-model2$p)/sum(diag(P)))
+100 * model2$sigma2 / (sum(model2$sigma2) + (model2$k-model2$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between and-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+
+
+#### ROM ####
+W <- diag(1/model4$vi)
+X <- model.matrix(model4)
+P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+100 * sum(model4$sigma2) / (sum(model4$sigma2) + (model4$k-model4$p)/sum(diag(P)))
+100 * model4$sigma2 / (sum(model4$sigma2) + (model4$k-model4$p)/sum(diag(P)))
+#1st number: x1% of the total variance is estimated to be due to between-cluster heterogeneity, 
+#2nd number: x2% due to within-cluster heterogeneity, 
+#remainder (100-x1-x2)% due to sampling variance.
+```
+
+
+##robustness
+###unbalanced sampling design (ALA_1, GRE_6)
+```{r excluding largest datasets, echo=FALSE, warnings=FALSE}
+dfsub <- df  %>% dplyr::filter(Exp_ID != "GRE_6") 
+dfsub <- dfsub  %>% dplyr::filter(Exp_ID != "ALA_1")
+
+#including the big datasets - main meta-analysis in manuscript
+model1_robust <-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df)
+summary(model1_robust)
+
+#excluding the big datasets - supplementary check: big difference?
+model2_robust <- rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=dfsub)
+summary(model2_robust)
+```
+
+###machine type
+```{r excluding largest datasets, echo=FALSE, warnings=FALSE}
+df$Machine_Type<-as.factor(df$Machine_Type)
+dfsublaser <- df  %>% dplyr::filter(Machine_Type == "Laser") 
+dfsubir <- df  %>% dplyr::filter(Machine_Type == "IR") 
+
+#laser
+model1_laser <-rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=dfsublaser)
+summary(model1_laser)
+
+#lir
+model2_ir <- rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=dfsubir)
+summary(model2_ir)
+```
+
+
+## forest plot
+### vertical
+```{r forest plot, echo=FALSE,warning=FALSE}
+
+#a) Hedges SMD
+
+# pdf("forestplot_HedgesSMD.pdf", width=25, height=80)
+# 
+# forest(model2, header=c("Site_ID_Year", "Hedges SMD [95% CI]"), slab = df$Dataset_ID,xlab="Hedges SMD", cex=3, cex.lab=3, cex.axis=3, xlim=c(-3,5), main="Forest plot Hedges SMD", top=-2.5, cex.main=4, steps=10, pch=22, bg=2, efac=0.15)
+
+# dev.off()
+
+
+
+#b) ROM
+
+# pdf("forestplot_ROM.pdf", width=25, height=80)
+
+# forest(model4, header=c("Site_ID_Year", "ROM [95% CI]"), slab = df$Dataset_ID,xlab="ROM", cex=3, cex.lab=3, cex.axis=3, xlim=c(-3,5), main="Forest plot ROM", top=-2.5, cex.main=4, steps=10, pch=22, bg=2, efac=0.15)
+
+# dev.off()
+
+```
+### horizontal (lines +0.2, +0.5, +0.8)
+
+```{r Forest plot horizontal Fig2, echo=FALSE,warning=FALSE}
+# model2
+
+# Make dataframe with the means and CIs to plot (already had that one: see csv file)
+# extract weights from the model to add to the csv file
+weights<-weights(model2) #already in the right order
+yi<-model2$yi #as doublecheck for order
+weights<-as.data.frame(cbind(weights,yi))
+write.csv(weights,"weights.csv")
+
+df<-read.csv("Forestplot_horiz_weights_fig.csv") #added the mean pooled which should be changed to purple in the same csv, otherwise issues with factors in right order
+
+
+####rearrange!!
+df$DS_ID
+#remove the "ER" from the DS ID
+df$DS_ID_fig <- gsub("_ER_", "    ", df$DS_ID)
+substring(df$DS_ID_fig, 4)<-c(" ") #remove the underscore after the country code (for editing in pdf editor)
+
+df$DS_ID_fig[which(df$DS=="2")]<-"AAAB" 
+df$DS_ID_fig[which(df$DS=="1")]<-"AAAA"
+df$DS_ID_fig[which(df$DS=="3")]<-"AAAC" 
+
+# #get factor level site_flux_id in order of appearance when ordered along site id
+# df <- df   %>% arrange(DS) #staat al in goeie order
+
+df$DS_ID<-as.factor(df$DS_ID)
+df$DS_ID_fig<-as.factor(df$DS_ID_fig)
+
+levels(df$DS_ID)
+levels(df$DS_ID_fig)
+
+df$DS_ID <- fct_inorder(df$DS_ID)
+df$DS_ID_fig <- fct_inorder(df$DS_ID_fig)
+
+levels(df$DS_ID)
+levels(df$DS_ID_fig)
+
+
+pdf("Fig_2_raw.pdf", width=22, height=10)
+ggplot() +
+  geom_point(data=df, mapping=aes(x=DS_ID, y=Hedges_SMD), size=2, shape=21, fill="black") +
+  # scale_x_discrete(breaks = every_nth(n = 4))+#, guide = guide_axis(n.dodge = 2))+
+  scale_y_continuous(limits = c(-2.2,3.4), breaks=c(-2,-1,0,1,2,3))+
+  geom_errorbar(data=df, mapping=aes(x=DS_ID, ymin=CI_lb, ymax=CI_ub), width=0.08, size=1, color="black") +  #the estimates of the model + error bars
+  # ggtitle("Warming-induced changes in respiration (Hedges SMD +- 95%CI): Individual datasets") +
+
+#
+  # geom_point(data=df2, mapping=aes(x=DS_ID, y=Hedges_SMD), size=8, shape=18, fill="purple", color="purple") +
+  # geom_errorbar(data=df2, mapping=aes(x=DS_ID, ymin=CI_lb, ymax=CI_ub), width=0.1, size=1, color="purple") +  #the estimates of the model + error bars
+#NOT NEEDED ANYMORE, I PUT THEM IN ONE FILE JUST CHANGE COLOR LATER IN PDF
+
+  ylab("ER Hedges SMD") +
+  xlab("Datasets")+
+ geom_hline(yintercept=0.8, linetype="dashed", color = "black", size=0.4)+
+  geom_hline(yintercept=0.5, linetype="dashed", color = "black", size=0.4)+
+  geom_hline(yintercept=0.2, linetype="dashed", color = "black", size=0.4)+
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=2)+
+  geom_hline(yintercept=-0.2, linetype="dashed", color = "black", size=0.4)+
+  geom_hline(yintercept=-0.5, linetype="dashed", color = "black", size=0.4)+
+  geom_hline(yintercept=-0.8, linetype="dashed", color = "black", size=0.4)+
+  theme_classic()+
+  theme(text = element_text(size = 15), plot.title = element_text(hjust = 0.5), plot.margin=unit(c(1.2,1.2,1.2,1.2),"cm"), axis.text.x = element_text(angle = 90, hjust = 1, vjust=0.5), axis.title = element_text(size = rel(1.8)), axis.text.y=element_text(size=rel(1.8)))+ #Top Right Bottom Left
+
+  annotate("text", x=20, y=-2.1, label= "est=0.568, Q=731, p-val=<0.0001***", size=8, colour="black") +
+  annotate("text", x=70, y=3, label= "SMD>0: Respiration ↑ with warming", size=6, colour="black") +
+  annotate("text", x=70, y=-2, label= "SMD<0: Respiration ↓ with warming", size=6, colour="black") +
+
+
+  geom_vline(xintercept=1, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=5, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=9, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=13, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=17, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=21, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=25, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=29, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=33, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=37, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=41, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=45, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=49, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=53, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=57, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=61, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=65, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=69, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=73, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=77, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=81, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=85, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=89, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=93, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=97, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=101, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=105, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=109, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=113, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=117, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=121, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=125, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=129, linetype="dashed", color = "lightgrey", size=0.15)+
+  geom_vline(xintercept=133, linetype="dashed", color = "lightgrey", size=0.15)
+
+dev.off()
+
+
+```
+

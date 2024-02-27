@@ -1,0 +1,132 @@
+---
+title: "df_6_effect size_partitioning"
+author: "Sarah Schwieger"
+date: "2023-04-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(metafor) # calculate effect size and do meta analysis
+library(lmtest)
+library(readr) # read in data
+library(dplyr)# handle data
+library(ggplot2) # plot data
+library(patchwork) # combine graphs
+library(Rmisc)
+
+# load ER partitioning data
+data <- read_csv("df_3.csv")
+data$treatment<-as.factor(data$treatment)
+
+# subset GS data
+data <- subset(data, season_automatic == "GS" & c_loss=="CO2", )
+data <- subset(data, site_id_automatic != "CAN_2" & site_id_automatic != "CAN_3" & site_id_automatic != "CAN_4" & site_id_automatic != "SWE_12", )
+
+# count number of missing values in each column
+missing_cols <- colSums(is.na(data))
+# subset dataset to remove columns with only missing values
+ER_data <- subset(data, select = -which(missing_cols == nrow(data)))
+```
+
+```{r fit random-effects models}
+
+df_meta <- read_csv("df_4.csv")
+
+## HETEROTROPHIC
+## SMD
+#original: rma.mv(Hedges_SMD, Hedges_SMD_VARIANCE, random=list(~ 1 |  Exp_ID / Observation_ID , ~ Year |  Exp_ID ), struct="CAR", data=df)
+model <- rma.mv(SMD_HR, var_SMD_HR, 
+                random=list(~ 1 |  site_id_automatic / n_OTC_hr, 
+                            ~ flux_year_automatic |  site_id_automatic ), 
+                struct="CAR", 
+                data=df_meta)
+summary(model)
+predict(model)
+
+##ROM
+model1 <- rma.mv(ROM_HR, var_ROM_HR, 
+                 random=list(~ 1 |  site_id_automatic / n_OTC_hr, 
+                             ~ flux_year_automatic |  site_id_automatic ), 
+                 struct="CAR", 
+                 data=df_meta)
+summary(model1)
+
+RR1<-exp(0.4351)
+perc1 = 100*(RR1-1)
+
+# back-transform results to the risk ratio scale
+predict(model1, digits=2, transf=exp)
+
+
+## AUTOTROPHIC
+## SMD
+model2 <- rma.mv(SMD_AU, var_SMD_AU, 
+                random=list(~ 1 |  site_id_automatic / n_OTC_au, 
+                            ~ flux_year_automatic |  site_id_automatic ), 
+                struct="CAR", 
+                data=df_meta)
+summary(model2)
+
+##ROM
+model3 <- rma.mv(ROM_AU, var_ROM_AU, 
+                 random=list(~ 1 |  site_id_automatic / n_OTC_au, 
+                             ~ flux_year_automatic |  site_id_automatic ), 
+                 struct="CAR", 
+                 data=df_meta)
+summary(model3)
+
+RR3<-exp(0.4504)
+perc3 = 100*(RR3-1)
+
+# back-transform results to the risk ratio scale
+predict(model3, digits=2, transf=exp)
+
+## ECOSYSTEM
+## SMD
+model4 <- rma.mv(SMD_ER, var_SMD_ER, 
+                random=list(~ 1 |  site_id_automatic / n_OTC_er, 
+                            ~ flux_year_automatic |  site_id_automatic ), 
+                struct="CAR", 
+                data=df_meta)
+summary(model4)
+
+##ROM
+model5 <- rma.mv(ROM_ER, var_ROM_ER, 
+                 random=list(~ 1 |  site_id_automatic / n_OTC_er, 
+                             ~ flux_year_automatic |  site_id_automatic ), 
+                 struct="CAR", 
+                 data=df_meta)
+summary(model5)
+
+RR5<-exp(0.3304)
+perc5 = 100*(RR5-1)
+
+perc5=(exp(0.3332) - 1) * 100
+
+# back-transform results to the risk ratio scale
+predict(model5, digits=2, transf=exp)
+
+## HETEROTROPHIC/ECOSYSTEM RESPIRATION
+## SMD
+model6 <- rma.mv(SMD_HE, var_SMD_HE, 
+                random=list(~ 1 |  site_id_automatic / n_OTC_he, 
+                            ~ flux_year_automatic |  site_id_automatic ), 
+                struct="CAR", 
+                data=df_meta)
+summary(model6)
+
+##ROM
+model7 <- rma.mv(ROM_HE, var_ROM_HE, 
+                 random=list(~ 1 |  site_id_automatic / n_OTC_he, 
+                             ~ flux_year_automatic |  site_id_automatic ), 
+                 struct="CAR", 
+                 data=df_meta)
+summary(model7)
+
+# back-transform results to the risk ratio scale
+predict(model7, digits=2, transf=exp)
+
+# RR = exp(ROM)
+# percchange = 100*(RR-1)
+perc7=(exp(-0.0411) - 1) * 100
+```
